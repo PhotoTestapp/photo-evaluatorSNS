@@ -3,7 +3,7 @@
 GitHub Pages 向けの静的SNS試作です。
 
 ## 公開ファイル
-
+https://phototestapp.github.io/photo-evaluatorSNS/
 - `index.html`
 - `styles.css`
 - `script.js`
