@@ -43,6 +43,7 @@ const profileSavedCount = document.getElementById("profileSavedCount");
 const profilePulseAverage = document.getElementById("profilePulseAverage");
 const profileGallery = document.getElementById("profileGallery");
 const profileEmpty = document.getElementById("profileEmpty");
+const snsApiBaseMeta = document.querySelector('meta[name="pulse-sns-api-base"]');
 
 const SCORE_KEYS = ["構図", "光", "色", "技術", "主題性", "印象"];
 const SCORE_VALUE_KEYS = [
@@ -61,6 +62,7 @@ const STORAGE_KEYS = {
   snsFollows: "pulse_sns_follow_state_v1",
   snsAccounts: "pulse_sns_accounts_v1",
   snsSession: "pulse_sns_session_v1",
+  snsApiBase: "pulse_sns_api_base",
 };
 
 const DEFAULT_PROFILE = {
@@ -110,6 +112,37 @@ function normalizeHandle(handle) {
   const raw = (handle || "").trim().replace(/\s+/g, "");
   if (!raw) return DEFAULT_PROFILE.handle;
   return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
+function getConfiguredSnsApiBase() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.snsApiBase);
+    if (stored && /^https?:\/\//i.test(stored)) return stored.replace(/\/+$/, "");
+  } catch (error) {
+    console.warn("SNS API base storage unavailable", error);
+  }
+  const metaValue = snsApiBaseMeta?.getAttribute("content")?.trim() || "";
+  if (metaValue && /^https?:\/\//i.test(metaValue)) return metaValue.replace(/\/+$/, "");
+  if (/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)) return window.location.origin;
+  return "";
+}
+
+async function apiRequest(path, options = {}) {
+  const apiBase = getConfiguredSnsApiBase();
+  if (!apiBase) throw new Error("SNS API が未設定です");
+  const response = await fetch(`${apiBase}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.message || "SNS API request failed");
+  }
+  return payload;
 }
 
 function getProfileInitials(displayName) {
@@ -211,6 +244,15 @@ function saveAccounts(accounts) {
   } catch (error) {
     console.warn("Account save failed", error);
   }
+}
+
+function saveAccountSnapshot(account) {
+  if (!account) return;
+  const accounts = getAccounts();
+  const next = accounts.some((item) => item.id === account.id)
+    ? accounts.map((item) => (item.id === account.id ? { ...item, ...account } : item))
+    : [...accounts, account];
+  saveAccounts(next);
 }
 
 function getCurrentSession() {
@@ -1191,19 +1233,12 @@ presetMood?.addEventListener("click", () => {
 sidebarComposeButton?.addEventListener("click", focusComposer);
 emptyFeedComposeButton?.addEventListener("click", focusComposer);
 
-signupForm?.addEventListener("submit", (event) => {
+signupForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const email = signupEmail?.value.trim().toLowerCase() || "";
   const password = signupPassword?.value || "";
   if (!email || !password || password.length < 8) {
     if (signupStatus) signupStatus.textContent = "メールと8文字以上のパスワードを入力してください。";
-    return;
-  }
-  const accounts = getAccounts();
-  const session = getCurrentSession();
-  const existingAccount = accounts.find((account) => account.email === email);
-  if (existingAccount && (!session || existingAccount.id !== session.accountId)) {
-    if (signupStatus) signupStatus.textContent = "このメールアドレスはすでに登録されています。ログインを使ってください。";
     return;
   }
   const nextProfile = {
@@ -1213,6 +1248,43 @@ signupForm?.addEventListener("submit", (event) => {
     bio: signupBio?.value || "",
     avatarSrc: pendingAvatarSrc || getRegisteredProfile().avatarSrc || "",
   };
+  const apiBase = getConfiguredSnsApiBase();
+  if (apiBase) {
+    try {
+      const response = await apiRequest("/api/sns/register", {
+        body: JSON.stringify({ email, password, profile: nextProfile }),
+      });
+      const account = {
+        ...response.account,
+        password,
+      };
+      saveAccountSnapshot(account);
+      saveRegisteredProfile(account.profile);
+      saveSession({
+        accountId: account.id,
+        email: account.email,
+        password,
+        profile: account.profile,
+      });
+      applyProfileToUi(account.profile);
+      if (signupStatus) signupStatus.textContent = response.mode === "updated" ? "プロフィールを更新しました。" : `${account.email} で登録しました。`;
+      if (composerStatus) composerStatus.textContent = response.mode === "updated"
+        ? `${account.profile.displayName} のプロフィールを更新しました。`
+        : `${account.profile.displayName} のアカウントを作成しました。`;
+      return;
+    } catch (error) {
+      if (signupStatus) signupStatus.textContent = error.message;
+      return;
+    }
+  }
+
+  const accounts = getAccounts();
+  const session = getCurrentSession();
+  const existingAccount = accounts.find((account) => account.email === email);
+  if (existingAccount && (!session || existingAccount.id !== session.accountId)) {
+    if (signupStatus) signupStatus.textContent = "このメールアドレスはすでに登録されています。ログインを使ってください。";
+    return;
+  }
   const savedProfile = saveRegisteredProfile(nextProfile);
   const account = existingAccount
     ? {
@@ -1227,9 +1299,7 @@ signupForm?.addEventListener("submit", (event) => {
       password,
       profile: savedProfile,
     };
-  saveAccounts(existingAccount
-    ? accounts.map((item) => (item.id === account.id ? account : item))
-    : [...accounts, account]);
+  saveAccountSnapshot(account);
   saveSession({
     accountId: account.id,
     email: account.email,
@@ -1243,9 +1313,35 @@ signupForm?.addEventListener("submit", (event) => {
     : `${account.profile.displayName} のアカウントを作成しました。`;
 });
 
-loginButton?.addEventListener("click", () => {
+loginButton?.addEventListener("click", async () => {
   const email = signupEmail?.value.trim().toLowerCase() || "";
   const password = signupPassword?.value || "";
+  const apiBase = getConfiguredSnsApiBase();
+  if (apiBase) {
+    try {
+      const response = await apiRequest("/api/sns/login", {
+        body: JSON.stringify({ email, password }),
+      });
+      const account = {
+        ...response.account,
+        password,
+      };
+      saveAccountSnapshot(account);
+      saveRegisteredProfile(account.profile);
+      saveSession({
+        accountId: account.id,
+        email: account.email,
+        password,
+        profile: account.profile,
+      });
+      applyProfileToUi(account.profile);
+      if (signupStatus) signupStatus.textContent = `${account.email} でログインしました。`;
+      return;
+    } catch (error) {
+      if (signupStatus) signupStatus.textContent = error.message;
+      return;
+    }
+  }
   const account = getAccounts().find((item) => item.email === email && item.password === password);
   if (!account) {
     if (signupStatus) signupStatus.textContent = "メールアドレスまたはパスワードが一致しません。";
