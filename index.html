@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#fff8ef" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>Pulse SNS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">P</div>
+          <div>
+            <p class="brand-name">Pulse</p>
+            <p class="brand-sub">Creative Social Network</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a class="nav-link active" href="#feed">ホーム</a>
+          <a class="nav-link" href="#discover">見つける</a>
+          <a class="nav-link" href="#profile">プロフィール</a>
+        </nav>
+
+        <div class="sidebar-card">
+          <p class="eyebrow">Today Focus</p>
+          <h2>「好き」を共有して、つながりを深く。</h2>
+          <p>
+            写真、短文、イベント告知までひとつのタイムラインに。小さなコミュニティにも使いやすいSNSの試作です。
+          </p>
+          <button class="primary-button" id="sidebarComposeButton" type="button">投稿を作成</button>
+        </div>
+
+        <div class="sidebar-card signup-card">
+          <p class="eyebrow">Join Pulse</p>
+          <h2>ユーザー登録</h2>
+          <p>メールとパスワードでアカウントを作成し、同じブラウザでログイン状態を保持できます。</p>
+          <form id="signupForm" class="signup-form">
+            <div class="signup-avatar-row">
+              <div class="signup-avatar-preview gradient-avatar" id="signupAvatarPreview">SE</div>
+              <div class="signup-avatar-actions">
+                <span>アイコン</span>
+                <input id="signupAvatarInput" class="hidden-input" type="file" accept="image/*" />
+                <button class="chip" id="signupAvatarButton" type="button">画像を選ぶ</button>
+              </div>
+            </div>
+            <label class="signup-field">
+              <span>メール</span>
+              <input id="signupEmail" type="email" maxlength="120" placeholder="you@example.com" />
+            </label>
+            <label class="signup-field">
+              <span>パスワード</span>
+              <input id="signupPassword" type="password" maxlength="80" placeholder="8文字以上" />
+            </label>
+            <label class="signup-field">
+              <span>表示名</span>
+              <input id="signupDisplayName" type="text" maxlength="24" placeholder="Seiya Harada" />
+            </label>
+            <label class="signup-field">
+              <span>ハンドル</span>
+              <input id="signupHandle" type="text" maxlength="24" placeholder="@seiya" />
+            </label>
+            <label class="signup-field">
+              <span>地域</span>
+              <input id="signupLocation" type="text" maxlength="40" placeholder="Japan" />
+            </label>
+            <label class="signup-field">
+              <span>ひとこと</span>
+              <textarea id="signupBio" rows="3" maxlength="120" placeholder="写真とUIのあいだを記録するアカウント。"></textarea>
+            </label>
+            <div class="composer-actions signup-actions">
+              <button class="primary-button" type="submit">登録する</button>
+              <button class="chip" id="loginButton" type="button">ログイン</button>
+              <button class="chip" id="logoutButton" type="button">ログアウト</button>
+            </div>
+            <p class="signup-note" id="signupStatus">未ログインです。登録するとアカウント状態がこのブラウザに保存されます。</p>
+          </form>
+        </div>
+      </aside>
+
+      <main class="main-content" id="feed">
+        <section class="composer">
+          <div class="avatar gradient-avatar" id="composerAvatar">SE</div>
+          <div class="composer-box">
+            <textarea id="postInput" placeholder="写真に添える短いキャプションを入力"></textarea>
+            <input id="photoInput" class="hidden-input" type="file" accept="image/*" />
+            <div id="uploadPreview" class="upload-preview empty-preview">
+              <div class="upload-preview-copy">
+                <span class="upload-label">Photo Ready</span>
+                <strong>写真を選ぶとここにプレビューと実スコアが反映されます。</strong>
+              </div>
+            </div>
+            <div class="composer-actions">
+              <div class="chip-row">
+                <button id="uploadTrigger" class="chip active-chip">写真を選ぶ</button>
+                <button id="presetWide" class="chip" type="button">横写真</button>
+                <button id="presetMood" class="chip" type="button">ムード</button>
+              </div>
+              <button id="publishButton" class="primary-button">公開する</button>
+            </div>
+            <p class="composer-status" id="composerStatus">写真を選んで公開すると、Pulse が自動で反映されます。</p>
+          </div>
+        </section>
+
+        <section class="feed-toolbar">
+          <div class="filter-group" id="feedFilters">
+            <button class="filter-chip active-filter" data-filter="all" type="button">すべて</button>
+            <button class="filter-chip" data-filter="top" type="button">Top Score</button>
+            <button class="filter-chip" data-filter="new" type="button">新着</button>
+            <button class="filter-chip" data-filter="mine" type="button">自分の投稿</button>
+          </div>
+          <div class="feed-summary" id="feedSummary">0 live posts</div>
+        </section>
+
+        <section class="feed-list" id="feedList"></section>
+
+        <section class="empty-feed-card" id="emptyFeedCard">
+          <p class="eyebrow">Start Feed</p>
+          <h2>まだ投稿はありません</h2>
+          <p>ユーザー登録のあとに写真や短文を公開すると、ここから実データだけでタイムラインが育ちます。</p>
+          <button class="primary-button" id="emptyFeedComposeButton" type="button">最初の投稿を作成</button>
+        </section>
+
+        <section class="subpage-card profile-panel" id="profile">
+          <div class="profile-hero">
+            <div class="profile-hero-top">
+              <div class="profile-avatar-lg" id="profileAvatar">PU</div>
+              <div>
+                <h2 id="profileDisplayName">User</h2>
+                <p class="hero-copy" id="profileHandle">@user</p>
+                <p class="hero-copy" id="profileLocation">Japan</p>
+              </div>
+            </div>
+            <div class="profile-stat-row">
+              <div class="profile-stat-pill"><span>Posts</span><strong id="profilePostCount">0</strong></div>
+              <div class="profile-stat-pill"><span>Saved</span><strong id="profileSavedCount">0</strong></div>
+              <div class="profile-stat-pill"><span>Avg Pulse</span><strong id="profilePulseAverage">0</strong></div>
+            </div>
+            <p id="profileBio">プロフィール情報がまだありません。</p>
+          </div>
+          <div class="profile-gallery" id="profileGallery"></div>
+          <p class="empty-list" id="profileEmpty">まだ表示できる投稿がありません。</p>
+        </section>
+
+      </main>
+
+      <aside class="right-panel" id="discover">
+        <section class="panel-card score-system-card">
+          <p class="eyebrow">Pulse Score</p>
+          <h3>写真スコア体験</h3>
+          <p>既存アプリのAI採点と反応指標を合成。作品力とコミュニティの勢いを分けて見せつつ、最終スコアにまとめます。</p>
+          <div class="system-points">
+            <span>構図</span>
+            <span>光</span>
+            <span>色</span>
+            <span>技術</span>
+            <span>主題性</span>
+            <span>印象</span>
+          </div>
+        </section>
+
+        <section class="panel-card">
+          <p class="eyebrow">Trending Shots</p>
+          <ul class="trend-list" id="trendList"></ul>
+        </section>
+
+        <section class="panel-card">
+          <p class="eyebrow">Top Scores</p>
+          <ul class="leader-list" id="leaderList"></ul>
+        </section>
+
+        <section class="panel-card">
+          <p class="eyebrow">Following</p>
+          <ul class="leader-list" id="followingList"></ul>
+        </section>
+
+        <section class="panel-card glass-card" id="messages">
+          <p class="eyebrow">Visual Notes</p>
+          <h3>今日の写真ハイライト</h3>
+          <p id="highlightCopy">
+            反応が高いのは、スコア90点以上の写真。保存数は総合点よりも「色」と「印象」の高さに強く引っ張られています。
+          </p>
+        </section>
+
+        <section class="panel-card">
+          <p class="eyebrow">Session Stats</p>
+          <div class="session-grid">
+            <div class="session-card">
+              <span>Live Posts</span>
+              <strong id="sessionPostCount">0</strong>
+            </div>
+            <div class="session-card">
+              <span>Avg Pulse</span>
+              <strong id="sessionPulseAverage">0</strong>
+            </div>
+            <div class="session-card">
+              <span>My Uploads</span>
+              <strong id="sessionMyPosts">0</strong>
+            </div>
+            <div class="session-card">
+              <span>Best Rank</span>
+              <strong id="sessionBestRank">-</strong>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
