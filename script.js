@@ -867,7 +867,7 @@ function renderUploadPreview(dataUrl, totalScore, caption = "写真を解析し�
   dom.uploadPreview.innerHTML = `
     <img src="${escapeHtml(dataUrl)}" alt="アップロードした写真のプレビュー" />
     <div class="upload-preview-info">
-      <span class="upload-label">Photo Score Preview</span>
+      <span class="upload-label">投稿画像</span>
       <strong>${escapeHtml(totalScore)} / 100</strong>
       <p>${escapeHtml(caption)}</p>
     </div>
@@ -879,7 +879,7 @@ function resetUploadPreview() {
   state.pendingPhotoFile = null;
   if (dom.photoInput) dom.photoInput.value = "";
   dom.uploadPreview.className = "upload-preview empty-preview";
-  dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">画像プレビュー</span><strong>写真を選ぶとここにプレビューと投稿用スコア候補が表示されます。</strong></div>`;
+  dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">投稿画像</span><strong>写真を選ぶとここにプレビューと投稿用スコア候補が表示されます。</strong></div>`;
 }
 
 async function preparePendingPhoto(file) {
@@ -950,7 +950,7 @@ function createPostMarkup(post) {
               type="button"
               data-action="follow"
               data-user-id="${escapeHtml(post.authorId)}"
-            >${post.viewerIsFollowingAuthor ? "Following" : "Follow"}</button>
+            >${post.viewerIsFollowingAuthor ? "フォロー中" : "フォロー"}</button>
           `}
         </div>
       </div>
@@ -963,7 +963,7 @@ function createPostMarkup(post) {
       <div class="media-block">
         <img src="${escapeHtml(post.imageSrc)}" alt="${escapeHtml(post.imageAlt)}" class="post-uploaded-image" />
         <div class="photo-overlay">
-          <span>Photo Score</span>
+          <span>写真スコア</span>
           <strong>${escapeHtml(tag)}</strong>
         </div>
       </div>
@@ -977,26 +977,26 @@ function createPostMarkup(post) {
     `}
     <p class="post-body">${escapeHtml(post.content || "")}</p>
     <div class="score-summary">
-      <div class="score-summary-card"><span>Photo Score</span><strong>${escapeHtml(post.baseScore)}</strong></div>
+      <div class="score-summary-card"><span>写真スコア</span><strong>${escapeHtml(post.baseScore)}</strong></div>
       <div class="score-summary-card"><span>Pulse</span><strong>${escapeHtml(post.pulse)}</strong></div>
-      <div class="score-summary-card"><span>Final Rank</span><strong>${escapeHtml(getRankLabel(post.finalScore))}</strong></div>
+      <div class="score-summary-card"><span>最終ランク</span><strong>${escapeHtml(getRankLabel(post.finalScore))}</strong></div>
     </div>
     <div class="engagement-panel">
       <div class="engagement-stats">
-        <span>Likes <strong>${escapeHtml(post.likesCount)}</strong></span>
-        <span>Saved <strong>${escapeHtml(post.savesCount)}</strong></span>
-        <span>Posted <strong>${escapeHtml(getRelativeTime(post.createdAt))}</strong></span>
+        <span>いいね <strong>${escapeHtml(post.likesCount)}</strong></span>
+        <span>保存 <strong>${escapeHtml(post.savesCount)}</strong></span>
+        <span>投稿 <strong>${escapeHtml(getRelativeTime(post.createdAt))}</strong></span>
       </div>
     </div>
     <div class="score-grid">${buildScoreMarkup(post.scoreValues)}</div>
     <div class="post-actions">
-      <button class="action-button like-button ${post.viewerHasLiked ? "liked" : ""}" type="button" data-action="like" data-post-id="${escapeHtml(post.id)}">${escapeHtml(post.likesCount)} Likes</button>
+      <button class="action-button like-button ${post.viewerHasLiked ? "liked" : ""}" type="button" data-action="like" data-post-id="${escapeHtml(post.id)}">${escapeHtml(post.likesCount)} いいね</button>
       <a class="action-button" href="#profile">プロフィール</a>
-      <button class="action-button save-toggle ${post.viewerHasSaved ? "saved-action" : ""}" type="button" data-action="save" data-post-id="${escapeHtml(post.id)}">${post.viewerHasSaved ? "Saved" : "Save"}</button>
+      <button class="action-button save-toggle ${post.viewerHasSaved ? "saved-action" : ""}" type="button" data-action="save" data-post-id="${escapeHtml(post.id)}">${post.viewerHasSaved ? "保存済み" : "保存"}</button>
     </div>
     <div class="comment-preview">
       <div class="comment-preview-head">
-        <strong>Score memo</strong>
+        <strong>スコアメモ</strong>
         <span>サーバー反映済み</span>
       </div>
       <p>${escapeHtml(summarizeScores(post.scoreValues))}</p>
@@ -1053,8 +1053,8 @@ function renderFollowingList() {
 function updateFeedSummary() {
   if (!dom.feedSummary) return;
   const visibleCount = getVisibleFeedPosts().length;
-  const labelMap = { all: "live", top: "top score", new: "new", mine: "my" };
-  dom.feedSummary.textContent = `${visibleCount} ${labelMap[state.activeFilter] || "live"} posts`;
+  const labelMap = { all: "全体", top: "高スコア", new: "新着", mine: "自分" };
+  dom.feedSummary.textContent = `${visibleCount}件 / ${labelMap[state.activeFilter] || "全体"}`;
 }
 
 function updateTrendList() {
@@ -1071,7 +1071,7 @@ function updateTrendList() {
   dom.trendList.innerHTML = Object.entries(rankedTags)
     .sort((left, right) => right[1] - left[1])
     .slice(0, 3)
-    .map(([label, count]) => `<li><span>#${escapeHtml(String(label).replace(/\s+/g, ""))}</span><strong>${escapeHtml(count)} posts</strong></li>`)
+    .map(([label, count]) => `<li><span>#${escapeHtml(String(label).replace(/\s+/g, ""))}</span><strong>${escapeHtml(count)}件</strong></li>`)
     .join("");
 }
 

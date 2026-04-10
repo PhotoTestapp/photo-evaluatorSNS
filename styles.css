@@ -1,15 +1,25 @@
 :root {
-  --bg: #f4f1eb;
-  --surface: #ffffff;
-  --surface-strong: #fbfaf8;
-  --ink: #1e2732;
-  --muted: #66707d;
-  --line: rgba(30, 39, 50, 0.1);
-  --accent: #d86a43;
-  --accent-deep: #a84a2d;
-  --secondary: #2f7a67;
-  --glow: #e6d6c6;
-  --shadow: 0 8px 20px rgba(20, 27, 35, 0.05);
+  --bg: #0f0f11;
+  --surface: #18181c;
+  --surface2: #222228;
+  --surface-strong: #222228;
+  --border: #2e2e38;
+  --line: #2e2e38;
+  --text: #f0f0f4;
+  --ink: #f0f0f4;
+  --text-muted: #7a7a8e;
+  --muted: #7a7a8e;
+  --text-dim: #3e3e52;
+  --accent: #e8ff47;
+  --accent-dim: rgba(232, 255, 71, 0.12);
+  --accent-border: rgba(232, 255, 71, 0.3);
+  --green: #4ade80;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --blue: #60a5fa;
+  --radius: 12px;
+  --radius-lg: 20px;
+  --shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
 
 * {
@@ -23,10 +33,10 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: "Zen Kaku Gothic New", sans-serif;
-  color: var(--ink);
+  font-family: "Noto Sans JP", sans-serif;
+  color: var(--text);
   overflow-x: hidden;
-  background: linear-gradient(180deg, #f7f4ef 0%, #f1ede7 100%);
+  background: var(--bg);
 }
 
 button,
@@ -88,9 +98,9 @@ textarea {
 .composer,
 .post-card {
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
 }
 
 .sidebar-card,
@@ -110,10 +120,10 @@ textarea {
   place-items: center;
   width: 48px;
   height: 48px;
-  border-radius: 14px;
-  font-family: "Outfit", sans-serif;
+  border-radius: var(--radius);
+  font-family: "DM Mono", monospace;
   font-weight: 700;
-  color: white;
+  color: var(--bg);
 }
 
 .avatar-image,
@@ -132,12 +142,13 @@ textarea {
 }
 
 .brand-mark {
-  background: linear-gradient(135deg, #ff885b, #ff4f6c);
+  background: var(--accent);
+  border: 1px solid var(--accent-border);
 }
 
 .brand-name {
   margin: 0;
-  font-family: "Outfit", sans-serif;
+  font-family: "Noto Sans JP", sans-serif;
   font-size: 1.1rem;
   font-weight: 600;
 }
@@ -153,34 +164,43 @@ textarea {
 
 .eyebrow {
   margin: 0 0 8px;
-  font-family: "Outfit", sans-serif;
+  font-family: "DM Mono", monospace;
   font-size: 0.74rem;
   letter-spacing: 0.08em;
   text-transform: none;
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .nav {
-  display: grid;
+  display: flex;
   gap: 8px;
   margin-bottom: 18px;
+  position: sticky;
+  top: 12px;
+  padding: 8px;
+  min-height: 56px;
+  align-items: center;
+  background: rgba(24, 24, 28, 0.92);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: none;
 }
 
 .nav-link {
-  padding: 12px 14px;
-  border-radius: 12px;
-  color: var(--ink);
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text-muted);
   text-decoration: none;
   background: transparent;
   border: 1px solid transparent;
-  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
 }
 
 .nav-link:hover,
 .nav-link.active {
-  transform: none;
-  border-color: var(--line);
-  background: #f5f3ef;
+  border-color: var(--accent-border);
+  background: var(--accent);
+  color: var(--bg);
 }
 
 .sidebar-card h2,
@@ -240,11 +260,11 @@ textarea {
 .signup-field input,
 .signup-field textarea {
   width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 11px 13px;
-  background: #fff;
-  color: var(--ink);
+  background: var(--surface2);
+  color: var(--text);
   resize: vertical;
 }
 
@@ -256,17 +276,17 @@ textarea {
 
 .api-mode-note {
   padding: 10px 12px;
-  border-radius: 14px;
-  background: #f7f5f1;
-  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .is-error {
-  color: var(--accent-deep);
+  color: var(--red);
 }
 
 .is-success {
-  color: var(--secondary);
+  color: var(--green);
 }
 
 .signup-actions {
@@ -283,9 +303,9 @@ textarea {
 
 .primary-button {
   padding: 11px 16px;
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--accent);
-  color: white;
+  color: var(--bg);
   font-weight: 600;
 }
 
@@ -309,16 +329,16 @@ textarea {
   min-height: 108px;
   resize: vertical;
   padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #fff;
-  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  color: var(--text);
   font-size: 1rem;
   outline: none;
 }
 
 textarea::placeholder {
-  color: #6b7487;
+  color: var(--text-muted);
 }
 
 #postInput {
@@ -341,11 +361,11 @@ textarea::placeholder {
 .upload-preview {
   margin-top: 16px;
   min-height: 180px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   overflow: hidden;
   position: relative;
-  background: #f6f4ef;
-  border: 1px solid var(--line);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .empty-preview {
@@ -363,9 +383,9 @@ textarea::placeholder {
   margin-bottom: 10px;
   padding: 6px 9px;
   border-radius: 999px;
-  background: #ebe6de;
-  color: var(--muted);
-  font-family: "Outfit", sans-serif;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: "DM Mono", monospace;
   font-size: 0.76rem;
   letter-spacing: 0.08em;
   text-transform: none;
@@ -390,8 +410,8 @@ textarea::placeholder {
   position: absolute;
   inset: auto 0 0 0;
   padding: 18px;
-  color: white;
-  background: linear-gradient(180deg, transparent 0%, rgba(18, 24, 32, 0.56) 100%);
+  color: var(--text);
+  background: linear-gradient(180deg, transparent 0%, rgba(15, 15, 17, 0.88) 100%);
 }
 
 .upload-preview-info strong {
@@ -414,15 +434,16 @@ textarea::placeholder {
 .action-button,
 .follow-button {
   padding: 8px 12px;
-  border-radius: 999px;
-  background: #f5f3ef;
-  color: var(--ink);
-  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
 }
 
 .active-chip {
-  background: #efe4dc;
-  color: var(--accent-deep);
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent-border);
 }
 
 .feed-list {
@@ -433,9 +454,9 @@ textarea::placeholder {
 .empty-feed-card,
 .empty-profile-card {
   padding: 22px;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
 
@@ -465,9 +486,9 @@ textarea::placeholder {
 .subpage-header,
 .subpage-card {
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   padding: 20px;
 }
 
@@ -516,18 +537,23 @@ textarea::placeholder {
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #34517e, #55739e);
-  color: white;
-  font-family: "Outfit", sans-serif;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-family: "DM Mono", monospace;
   font-size: 2rem;
   font-weight: 700;
 }
 
 .profile-stat-pill {
   padding: 10px 12px;
-  border-radius: 14px;
-  background: #f8f6f2;
-  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.profile-stat-pill strong {
+  font-family: "DM Mono", monospace;
 }
 
 .profile-gallery {
@@ -538,11 +564,11 @@ textarea::placeholder {
 
 .profile-gallery-item {
   min-height: 220px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   overflow: hidden;
   position: relative;
-  background: #fff;
-  border: 1px solid var(--line);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .profile-gallery-item img {
@@ -557,8 +583,8 @@ textarea::placeholder {
   position: absolute;
   inset: auto 0 0 0;
   padding: 16px;
-  color: white;
-  background: linear-gradient(180deg, transparent 0%, rgba(7, 12, 22, 0.72) 100%);
+  color: var(--text);
+  background: linear-gradient(180deg, transparent 0%, rgba(15, 15, 17, 0.9) 100%);
 }
 
 .feed-toolbar {
@@ -576,28 +602,31 @@ textarea::placeholder {
 }
 
 .filter-chip {
-  border: 0;
-  border-radius: 999px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   padding: 8px 12px;
-  background: #f5f3ef;
-  color: var(--muted);
+  background: var(--surface2);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: transform 160ms ease, background 160ms ease, color 160ms ease;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
 .filter-chip:hover {
-  transform: translateY(-1px);
+  border-color: var(--accent-border);
+  color: var(--text);
 }
 
 .active-filter {
-  background: #efe4dc;
-  color: var(--accent-deep);
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
   font-weight: 600;
 }
 
 .feed-summary {
   color: var(--muted);
   font-size: 0.88rem;
+  font-family: "DM Mono", monospace;
 }
 
 .post-card {
@@ -646,9 +675,10 @@ textarea::placeholder {
 .tag {
   padding: 6px 10px;
   border-radius: 999px;
-  background: #f3eee7;
-  color: var(--muted);
-  font-family: "Outfit", sans-serif;
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  font-family: "DM Mono", monospace;
   font-size: 0.85rem;
   font-weight: 500;
 }
@@ -660,26 +690,26 @@ textarea::placeholder {
   min-width: 46px;
   padding: 8px 12px;
   border-radius: 999px;
-  font-family: "Outfit", sans-serif;
+  font-family: "DM Mono", monospace;
   font-size: 0.92rem;
   font-weight: 600;
-  color: var(--ink);
-  background: #efe4dc;
+  color: var(--bg);
+  background: var(--accent);
 }
 
 .score-pill.strong {
-  background: #e8edf4;
+  background: var(--blue);
 }
 
 .score-pill.excellent {
-  background: #ece1d7;
+  background: var(--green);
 }
 
 .post-body {
   margin: 0;
   line-height: 1.7;
   font-size: 0.98rem;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .post-meta-line {
@@ -694,21 +724,22 @@ textarea::placeholder {
   align-items: center;
   padding: 5px 8px;
   border-radius: 999px;
-  background: #f3eee7;
-  color: var(--muted);
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
   font-size: 0.72rem;
   font-weight: 600;
 }
 
 .media-block {
-  border-radius: 14px;
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--text);
   overflow: hidden;
   position: relative;
-  background: #f4f2ee;
+  background: var(--surface2);
 }
 
 .photo-card {
@@ -728,13 +759,15 @@ textarea::placeholder {
 .photo-overlay {
   width: 100%;
   padding: 18px;
-  background: linear-gradient(180deg, transparent 0%, rgba(18, 24, 32, 0.46) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(15, 15, 17, 0.88) 100%);
 }
 
 .photo-overlay span {
   font-size: 0.74rem;
   letter-spacing: 0.08em;
   text-transform: none;
+  color: var(--text-muted);
+  font-family: "DM Mono", monospace;
 }
 
 .photo-overlay strong {
@@ -754,7 +787,7 @@ textarea::placeholder {
 .text-media-card {
   min-height: 280px;
   align-items: end;
-  background: linear-gradient(135deg, #445a7b 0%, #677f9c 100%);
+  background: linear-gradient(135deg, #17171b 0%, #23232a 100%);
 }
 
 .score-grid {
@@ -771,9 +804,9 @@ textarea::placeholder {
 
 .score-summary-card {
   padding: 11px 12px;
-  border-radius: 12px;
-  background: #f8f6f2;
-  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .score-summary-card span {
@@ -784,7 +817,7 @@ textarea::placeholder {
 }
 
 .score-summary-card strong {
-  font-family: "Outfit", sans-serif;
+  font-family: "DM Mono", monospace;
   font-size: 1rem;
   font-weight: 600;
 }
@@ -796,9 +829,9 @@ textarea::placeholder {
   gap: 14px;
   flex-wrap: wrap;
   padding: 12px 14px;
-  border-radius: 12px;
-  background: #fbfaf8;
-  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .engagement-stats {
@@ -810,8 +843,8 @@ textarea::placeholder {
 }
 
 .engagement-stats strong {
-  color: var(--ink);
-  font-family: "Outfit", sans-serif;
+  color: var(--text);
+  font-family: "DM Mono", monospace;
   font-size: 1rem;
 }
 
@@ -819,9 +852,9 @@ textarea::placeholder {
   display: grid;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: 12px;
-  background: #fbfaf8;
-  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .comment-preview-head {
@@ -842,16 +875,16 @@ textarea::placeholder {
 
 .comment-preview p {
   margin: 0;
-  color: var(--ink);
+  color: var(--text);
   line-height: 1.6;
   font-size: 0.9rem;
 }
 
 .score-item {
   padding: 10px 12px;
-  border-radius: 12px;
-  background: #fbfaf8;
-  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .score-item span,
@@ -870,7 +903,7 @@ textarea::placeholder {
 .score-item strong {
   display: block;
   margin-bottom: 8px;
-  font-family: "Outfit", sans-serif;
+  font-family: "DM Mono", monospace;
   font-size: 1.15rem;
 }
 
@@ -878,14 +911,14 @@ textarea::placeholder {
   height: 8px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(22, 32, 50, 0.08);
+  background: #121217;
 }
 
 .score-fill {
   height: 100%;
   width: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #d98a63, #e6c08a);
+  background: var(--accent);
   transition: width 420ms ease;
 }
 
@@ -900,7 +933,8 @@ textarea::placeholder {
   padding: 8px 10px;
   border-radius: 10px;
   text-align: center;
-  background: #f6f3ee;
+  background: var(--surface2);
+  border: 1px solid var(--border);
   font-size: 0.82rem;
 }
 
@@ -924,8 +958,9 @@ textarea::placeholder {
   padding: 6px 8px;
   text-align: center;
   border-radius: 999px;
-  background: #f0ebe4;
-  font-family: "Outfit", sans-serif;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  font-family: "DM Mono", monospace;
 }
 
 .right-panel {
@@ -942,7 +977,7 @@ textarea::placeholder {
 }
 
 .right-panel .panel-card:not(.score-system-card):not(.glass-card) {
-  background: #fcfbf9;
+  background: var(--surface);
 }
 
 .trend-list {
@@ -969,13 +1004,15 @@ textarea::placeholder {
 }
 
 .saved-action {
-  background: #e7f1ed;
-  color: var(--secondary);
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--green);
+  border-color: rgba(74, 222, 128, 0.3);
 }
 
 .following-action {
-  background: #e7f1ed;
-  color: var(--secondary);
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--blue);
+  border-color: rgba(96, 165, 250, 0.3);
 }
 
 .session-grid {
@@ -986,9 +1023,9 @@ textarea::placeholder {
 
 .session-card {
   padding: 12px;
-  border-radius: 12px;
-  background: #f8f6f2;
-  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  border: 1px solid var(--border);
 }
 
 .session-card span {
@@ -999,21 +1036,23 @@ textarea::placeholder {
 }
 
 .session-card strong {
-  font-family: "Outfit", sans-serif;
+  font-family: "DM Mono", monospace;
   font-size: 1rem;
   font-weight: 600;
 }
 
 .glass-card {
-  background: #f8f6f2;
+  background: var(--surface);
 }
 
 .gradient-avatar {
-  background: linear-gradient(135deg, #4f6787, #6f88a8);
+  background: linear-gradient(135deg, #30303a, #202028);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .coral-avatar {
-  background: linear-gradient(135deg, #ff7b63, #ffb067);
+  background: linear-gradient(135deg, #2a2a33, #1c1c22);
 }
 
 .green-avatar {
@@ -1021,7 +1060,7 @@ textarea::placeholder {
 }
 
 .gold-avatar {
-  background: linear-gradient(135deg, #cb8b1f, #f7c85d);
+  background: linear-gradient(135deg, #2e2a1f, #1f1d18);
 }
 
 .blue-avatar {
@@ -1029,12 +1068,13 @@ textarea::placeholder {
 }
 
 .liked {
-  background: #efe4dc;
-  color: var(--accent-deep);
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent-border);
 }
 
 .score-boosted {
-  box-shadow: 0 0 0 4px rgba(255, 191, 82, 0.18);
+  box-shadow: 0 0 0 1px var(--accent-border);
 }
 
 .new-post {
@@ -1090,7 +1130,7 @@ textarea::placeholder {
 
 @media (max-width: 720px) {
   body {
-    background: linear-gradient(180deg, #f7f4ef 0%, #f1ede7 100%);
+    background: var(--bg);
   }
 
   .page-shell {
@@ -1108,7 +1148,7 @@ textarea::placeholder {
   .composer,
   .post-card {
     padding: 18px;
-    border-radius: 16px;
+    border-radius: var(--radius-lg);
   }
 
   .composer {
@@ -1117,6 +1157,7 @@ textarea::placeholder {
   }
 
   .nav {
+    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

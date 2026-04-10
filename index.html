@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#fff8ef" />
+    <meta name="theme-color" content="#0f0f11" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="pulse-sns-api-base" content="https://photo-evaluator-dl-api.onrender.com" />
-    <title>Pulse SNS</title>
+    <title>Photo Eval | Pulse SNS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -22,8 +22,8 @@
         <div class="brand">
           <div class="brand-mark">P</div>
           <div>
-            <p class="brand-name">Pulse</p>
-            <p class="brand-sub">写真と近況を共有するSNS</p>
+            <p class="brand-name">Photo Eval</p>
+            <p class="brand-sub">Pulse SNS</p>
           </div>
         </div>
 
@@ -98,7 +98,7 @@
             <input id="photoInput" class="hidden-input" type="file" accept="image/*" />
             <div id="uploadPreview" class="upload-preview empty-preview">
               <div class="upload-preview-copy">
-                <span class="upload-label">画像プレビュー</span>
+                <span class="upload-label">投稿画像</span>
                 <strong>写真を選ぶと、ここにプレビューと写真スコアが表示されます。</strong>
               </div>
             </div>
@@ -110,18 +110,18 @@
               </div>
               <button id="publishButton" class="primary-button" type="button">公開する</button>
             </div>
-            <p class="composer-status" id="composerStatus">写真を選んで公開すると、Pulse が自動で反映されます。</p>
+            <p class="composer-status" id="composerStatus">写真を選んで公開すると、フィードに反映されます。</p>
           </div>
         </section>
 
         <section class="feed-toolbar">
           <div class="filter-group" id="feedFilters">
             <button class="filter-chip active-filter" data-filter="all" type="button">すべて</button>
-            <button class="filter-chip" data-filter="top" type="button">Top Score</button>
+            <button class="filter-chip" data-filter="top" type="button">高スコア</button>
             <button class="filter-chip" data-filter="new" type="button">新着</button>
             <button class="filter-chip" data-filter="mine" type="button">自分の投稿</button>
           </div>
-          <div class="feed-summary" id="feedSummary">0 live posts</div>
+          <div class="feed-summary" id="feedSummary">0件 / 全体</div>
         </section>
 
         <section class="feed-list" id="feedList"></section>
@@ -147,9 +147,9 @@
               </div>
             </div>
             <div class="profile-stat-row">
-              <div class="profile-stat-pill"><span>Posts</span><strong id="profilePostCount">0</strong></div>
-              <div class="profile-stat-pill"><span>Saved</span><strong id="profileSavedCount">0</strong></div>
-              <div class="profile-stat-pill"><span>Avg Pulse</span><strong id="profilePulseAverage">0</strong></div>
+              <div class="profile-stat-pill"><span>投稿</span><strong id="profilePostCount">0</strong></div>
+              <div class="profile-stat-pill"><span>保存</span><strong id="profileSavedCount">0</strong></div>
+              <div class="profile-stat-pill"><span>平均Pulse</span><strong id="profilePulseAverage">0</strong></div>
             </div>
             <p id="profileBio">プロフィール情報がまだありません。</p>
           </div>
