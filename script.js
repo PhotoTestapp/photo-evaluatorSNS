@@ -115,6 +115,7 @@ const state = {
   updatingProfile: false,
   publishingPost: false,
   deletingPostIds: new Set(),
+  commentingPostIds: new Set(),
   legacyStorageCleaned: false,
   feedPagination: {
     cursor: null,
@@ -343,6 +344,23 @@ function setComposerStatus(message, tone) {
   setNotice(dom.composerStatus, message, tone);
 }
 
+function setActiveNavLink(targetId = "feed") {
+  document.querySelectorAll(".nav-link").forEach((link) => {
+    const isActive = link.getAttribute("href") === `#${targetId}`;
+    link.classList.toggle("active", isActive);
+  });
+}
+
+function scrollToSection(targetId, options = {}) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  setActiveNavLink(targetId);
+  target.scrollIntoView({
+    behavior: options.behavior || "smooth",
+    block: options.block || "start",
+  });
+}
+
 function renderAppModeNotice() {
   if (!dom.appModeNotice) return;
   if (state.apiMode === "online") {
@@ -515,6 +533,20 @@ function normalizeAccount(account) {
   };
 }
 
+function normalizeComment(comment) {
+  return {
+    id: String(comment?.id || ""),
+    postId: String(comment?.postId || ""),
+    authorId: String(comment?.authorId || comment?.author?.id || ""),
+    displayName: comment?.displayName || comment?.author?.displayName || DEFAULT_PROFILE.displayName,
+    handle: normalizeHandle(comment?.handle || comment?.author?.handle || DEFAULT_PROFILE.handle),
+    avatarSrc: comment?.avatarSrc || comment?.author?.avatarSrc || "",
+    content: String(comment?.content || ""),
+    createdAt: comment?.createdAt || comment?.created_at || "",
+    viewerOwnsComment: Boolean(comment?.viewerOwnsComment),
+  };
+}
+
 function normalizePost(post) {
   const scoreBreakdownSource = post?.scoreBreakdown || {};
   const scoreValues = Array.isArray(post?.scoreValues)
@@ -545,6 +577,8 @@ function normalizePost(post) {
     viewerHasLiked: Boolean(post?.viewerHasLiked),
     viewerHasSaved: Boolean(post?.viewerHasSaved),
     viewerIsFollowingAuthor: Boolean(post?.viewerIsFollowingAuthor),
+    commentsCount: Number(post?.commentsCount ?? post?.commentCount ?? (Array.isArray(post?.comments) ? post.comments.length : 0)),
+    comments: Array.isArray(post?.comments) ? post.comments.map(normalizeComment) : [],
     tag: post?.tag || getCaptionTag(post?.finalScore ?? post?.baseScore ?? 0),
   };
 }
@@ -921,6 +955,53 @@ function buildScoreMarkup(scoreValues) {
   `).join("");
 }
 
+function buildCommentsMarkup(post) {
+  const comments = Array.isArray(post.comments) ? post.comments : [];
+  const isSubmitting = state.commentingPostIds.has(post.id);
+  const commentsListMarkup = comments.length
+    ? comments.map((comment) => `
+        <li class="comment-item">
+          ${buildAvatarMarkup({ displayName: comment.displayName, avatarSrc: comment.avatarSrc }, "comment-avatar gradient-avatar")}
+          <div class="comment-copy">
+            <div class="comment-meta">
+              <strong>${escapeHtml(comment.displayName)}</strong>
+              <span>${escapeHtml(comment.handle)}</span>
+              <span>${escapeHtml(getRelativeTime(comment.createdAt))}</span>
+            </div>
+            <p>${escapeHtml(comment.content)}</p>
+          </div>
+        </li>
+      `).join("")
+    : '<li class="comment-empty">まだコメントはありません。</li>';
+
+  return `
+    <section class="comments-panel">
+      <div class="comment-preview-head">
+        <strong>コメント</strong>
+        <span>${escapeHtml(String(post.commentsCount || comments.length || 0))}件</span>
+      </div>
+      <ul class="comment-list">${commentsListMarkup}</ul>
+      <div class="comment-form">
+        <textarea
+          class="comment-input"
+          data-comment-input="${escapeHtml(post.id)}"
+          rows="2"
+          maxlength="220"
+          placeholder="${isLoggedIn() ? "コメントを入力" : "コメントするにはログインしてください"}"
+          ${isLoggedIn() ? "" : "disabled"}
+        ></textarea>
+        <button
+          class="action-button comment-submit"
+          type="button"
+          data-action="comment"
+          data-post-id="${escapeHtml(post.id)}"
+          ${isSubmitting || !isLoggedIn() ? "disabled" : ""}
+        >${isSubmitting ? "送信中" : "コメントする"}</button>
+      </div>
+    </section>
+  `;
+}
+
 function createPostMarkup(post) {
   const viewerOwnsPost = isLoggedIn() && post.authorId === state.session?.accountId;
   const deletingPost = state.deletingPostIds.has(post.id);
@@ -941,7 +1022,7 @@ function createPostMarkup(post) {
           </div>
         </div>
         <div class="post-author-actions">
-          <a class="chip" href="#profile">プロフィール</a>
+          <button class="chip" type="button" data-action="open-profile">プロフィール</button>
           ${viewerOwnsPost ? `
             <button class="chip" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}" ${deletingPost ? "disabled" : ""}>${deletingPost ? "削除中" : "削除"}</button>
           ` : `
@@ -985,13 +1066,14 @@ function createPostMarkup(post) {
       <div class="engagement-stats">
         <span>いいね <strong>${escapeHtml(post.likesCount)}</strong></span>
         <span>保存 <strong>${escapeHtml(post.savesCount)}</strong></span>
+        <span>コメント <strong>${escapeHtml(post.commentsCount)}</strong></span>
         <span>投稿 <strong>${escapeHtml(getRelativeTime(post.createdAt))}</strong></span>
       </div>
     </div>
     <div class="score-grid">${buildScoreMarkup(post.scoreValues)}</div>
     <div class="post-actions">
       <button class="action-button like-button ${post.viewerHasLiked ? "liked" : ""}" type="button" data-action="like" data-post-id="${escapeHtml(post.id)}">${escapeHtml(post.likesCount)} いいね</button>
-      <a class="action-button" href="#profile">プロフィール</a>
+      <button class="action-button" type="button" data-action="open-profile">プロフィール</button>
       <button class="action-button save-toggle ${post.viewerHasSaved ? "saved-action" : ""}" type="button" data-action="save" data-post-id="${escapeHtml(post.id)}">${post.viewerHasSaved ? "保存済み" : "保存"}</button>
     </div>
     <div class="comment-preview">
@@ -1001,6 +1083,7 @@ function createPostMarkup(post) {
       </div>
       <p>${escapeHtml(summarizeScores(post.scoreValues))}</p>
     </div>
+    ${buildCommentsMarkup(post)}
   `;
 }
 
@@ -1547,6 +1630,46 @@ async function toggleSave(postId, currentlySaved) {
   }
 }
 
+async function submitComment(postId, content) {
+  if (state.commentingPostIds.has(postId)) return;
+  if (!requireAuth("コメントするにはログインしてください。")) return;
+  const trimmed = String(content || "").trim();
+  if (!trimmed) {
+    setComposerStatus("コメント内容を入力してください。", "error");
+    return;
+  }
+
+  state.commentingPostIds.add(postId);
+  renderFeed(state.feed);
+  try {
+    const response = await apiRequest(`${API_ENDPOINTS.posts}/${encodeURIComponent(postId)}/comments`, {
+      method: "POST",
+      auth: true,
+      body: { content: trimmed },
+    });
+    const nextPost = response?.post ? normalizePost(response.post) : null;
+    if (nextPost) {
+      replacePostInCollections(nextPost);
+    } else {
+      const nextComment = normalizeComment(response?.comment || {});
+      const currentPost = state.feed.find((post) => post.id === postId);
+      if (currentPost) {
+        replacePostInCollections({
+          ...currentPost,
+          comments: [...currentPost.comments, nextComment],
+          commentsCount: Number(currentPost.commentsCount || 0) + 1,
+        });
+      }
+    }
+    setComposerStatus("コメントを投稿しました。", "success");
+  } catch (error) {
+    if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
+  } finally {
+    state.commentingPostIds.delete(postId);
+    renderFeed(state.feed);
+  }
+}
+
 async function toggleFollow(userId, currentlyFollowing) {
   if (!requireAuth()) return;
   try {
@@ -1564,8 +1687,13 @@ async function toggleFollow(userId, currentlyFollowing) {
 
 // Events
 function focusComposer() {
+  setActiveNavLink("feed");
   document.querySelector(".composer")?.scrollIntoView({ behavior: "smooth", block: "center" });
   window.setTimeout(() => dom.postInput?.focus(), 220);
+}
+
+function openProfileSection() {
+  scrollToSection("profile", { behavior: "smooth", block: "start" });
 }
 
 function bindFeedFilters() {
@@ -1583,6 +1711,10 @@ function bindFeedActions() {
     const button = event.target.closest("[data-action]");
     if (!button) return;
     const action = button.dataset.action;
+    if (action === "open-profile") {
+      openProfileSection();
+      return;
+    }
     if (action === "like") {
       const postId = button.dataset.postId || "";
       const current = state.feed.find((post) => post.id === postId);
@@ -1592,6 +1724,12 @@ function bindFeedActions() {
       const postId = button.dataset.postId || "";
       const current = state.feed.find((post) => post.id === postId);
       if (current) await toggleSave(postId, current.viewerHasSaved);
+    }
+    if (action === "comment") {
+      const postId = button.dataset.postId || "";
+      const input = Array.from(dom.feedList.querySelectorAll("[data-comment-input]"))
+        .find((node) => node.dataset.commentInput === postId);
+      if (postId && input) await submitComment(postId, input.value);
     }
     if (action === "follow") {
       const userId = button.dataset.userId || "";
@@ -1659,14 +1797,33 @@ function bindComposerEvents() {
   dom.publishButton?.addEventListener("click", publishPost);
   dom.presetWide?.addEventListener("click", () => {
     if (dom.postInput) dom.postInput.value = "横写真の抜け感を活かした一枚。光の流れがきれいに見えるカット。";
+    setComposerStatus("横写真向けの文例を入力しました。", "success");
   });
   dom.presetMood?.addEventListener("click", () => {
     if (dom.postInput) dom.postInput.value = "空気感を優先して、色と印象の余韻を残した投稿です。";
+    setComposerStatus("ムード重視の文例を入力しました。", "success");
   });
   dom.sidebarComposeButton?.addEventListener("click", focusComposer);
   dom.emptyFeedComposeButton?.addEventListener("click", focusComposer);
   dom.feedLoadMoreButton?.addEventListener("click", () => loadFeedPage({ filter: state.activeFilter, reset: false }));
   dom.profileLoadMoreButton?.addEventListener("click", () => loadProfilePostsPage({ reset: false }));
+}
+
+function bindNavigationEvents() {
+  document.querySelectorAll(".nav-link").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const href = link.getAttribute("href") || "";
+      if (!href.startsWith("#")) return;
+      event.preventDefault();
+      const targetId = href.slice(1) || "feed";
+      scrollToSection(targetId, { behavior: "smooth", block: "start" });
+    });
+  });
+
+  window.addEventListener("hashchange", () => {
+    const targetId = (window.location.hash || "#feed").slice(1) || "feed";
+    setActiveNavLink(targetId);
+  });
 }
 
 // Bootstrap
@@ -1700,9 +1857,11 @@ async function initializeApp() {
   bindUploadEvents();
   bindAuthEvents();
   bindComposerEvents();
+  bindNavigationEvents();
   renderFollowingList();
   renderProfileSection();
   resetUploadPreview();
+  setActiveNavLink((window.location.hash || "#feed").slice(1) || "feed");
   await detectApiMode();
 
   if (state.apiMode === "online") {

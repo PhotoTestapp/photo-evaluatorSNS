@@ -1,7 +1,7 @@
 # Pulse SNS
 
 Pulse SNS は、1ページ構成の最小SNSクライアントです。  
-このフロントは `meta[name="pulse-sns-api-base"]` で指定した API に接続し、認証、画像アップロード、投稿、反応、プロフィール更新、ページネーション付き一覧取得を行います。
+このフロントは `meta[name="pulse-sns-api-base"]` で指定した API に接続し、ユーザー登録、ログイン、画像アップロード、投稿、コメント、いいね、プロフィール更新、ページネーション付き一覧取得を行います。
 
 ## 対象ファイル
 
@@ -16,6 +16,7 @@ Pulse SNS は、1ページ構成の最小SNSクライアントです。
 - パスワードは保存しません
 - 投稿画像とアバター画像は必ず `POST /api/sns/uploads` を通します
 - スコア表記は `Photo Score` / `写真スコア` に統一しています
+- コメントは `POST /api/sns/posts/:id/comments` を使って投稿し、投稿レスポンスの `comments` / `commentsCount` を正として再描画します
 
 ## API ベース URL
 
@@ -304,10 +305,23 @@ Pulse SNS は、1ページ構成の最小SNSクライアントです。
       "finalScore": 74,
       "likesCount": 12,
       "savesCount": 4,
+      "commentsCount": 2,
       "createdAt": "2026-04-10T12:00:00.000Z",
       "viewerHasLiked": false,
       "viewerHasSaved": false,
-      "viewerIsFollowingAuthor": true
+      "viewerIsFollowingAuthor": true,
+      "comments": [
+        {
+          "id": "comment_001",
+          "postId": "post_123",
+          "authorId": "acct_777",
+          "displayName": "Aya",
+          "handle": "@aya",
+          "avatarSrc": "https://cdn.example.com/avatar-aya.jpg",
+          "content": "色のまとまりがとても好きです。",
+          "createdAt": "2026-04-10T12:10:00.000Z"
+        }
+      ]
     }
   ],
   "nextCursor": "cursor_2"
@@ -405,10 +419,12 @@ Pulse SNS は、1ページ構成の最小SNSクライアントです。
     "finalScore": 85,
     "likesCount": 0,
     "savesCount": 0,
+    "commentsCount": 0,
     "createdAt": "2026-04-10T12:00:00.000Z",
     "viewerHasLiked": false,
     "viewerHasSaved": false,
-    "viewerIsFollowingAuthor": false
+    "viewerIsFollowingAuthor": false,
+    "comments": []
   }
 }
 ```
@@ -508,6 +524,59 @@ Pulse SNS は、1ページ構成の最小SNSクライアントです。
   }
 }
 ```
+
+### 13. `POST /api/sns/posts/:id/comments`
+
+必須フィールド:
+
+- `content`
+
+リクエスト例:
+
+```json
+{
+  "content": "色のまとまりがとても好きです。"
+}
+```
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "post": {
+    "id": "post_123",
+    "commentsCount": 3,
+    "comments": [
+      {
+        "id": "comment_001",
+        "postId": "post_123",
+        "authorId": "acct_777",
+        "displayName": "Aya",
+        "handle": "@aya",
+        "avatarSrc": "https://cdn.example.com/avatar-aya.jpg",
+        "content": "色のまとまりがとても好きです。",
+        "createdAt": "2026-04-10T12:10:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "コメント内容を入力してください。"
+}
+```
+
+補足:
+
+- フロントは `post.comments` が返る場合はそのまま再描画します
+- 最小契約として `commentsCount` は必須です
+- `post` 全体を返さない場合は `comment` 単体と `commentsCount` を返してください
 
 エラーレスポンス例:
 

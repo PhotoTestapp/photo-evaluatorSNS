@@ -900,6 +900,81 @@ textarea::placeholder {
   font-size: 0.9rem;
 }
 
+.comments-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border);
+}
+
+.comment-list {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.comment-item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.comment-avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 0.8rem;
+}
+
+.comment-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.comment-copy p,
+.comment-empty {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.comment-empty {
+  color: var(--text-muted);
+}
+
+.comment-form {
+  display: grid;
+  gap: 10px;
+}
+
+.comment-input {
+  min-height: 78px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #f8fbff;
+  color: var(--text);
+  resize: vertical;
+}
+
+.comment-submit {
+  justify-self: flex-end;
+}
+
 .score-item {
   padding: 10px 12px;
   border-radius: var(--radius);
