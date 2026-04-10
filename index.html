@@ -85,6 +85,7 @@
               <button class="chip" id="logoutButton" type="button">ログアウト</button>
             </div>
             <p class="signup-note" id="signupStatus">未ログインです。登録するとアカウント状態がこのブラウザに保存されます。</p>
+            <p class="signup-note api-mode-note" id="appModeNotice">API接続を確認しています。</p>
           </form>
         </div>
       </aside>
@@ -103,11 +104,11 @@
             </div>
             <div class="composer-actions">
               <div class="chip-row">
-                <button id="uploadTrigger" class="chip active-chip">写真を選ぶ</button>
+                <button id="uploadTrigger" class="chip active-chip" type="button">写真を選ぶ</button>
                 <button id="presetWide" class="chip" type="button">横写真</button>
                 <button id="presetMood" class="chip" type="button">ムード</button>
               </div>
-              <button id="publishButton" class="primary-button">公開する</button>
+              <button id="publishButton" class="primary-button" type="button">公開する</button>
             </div>
             <p class="composer-status" id="composerStatus">写真を選んで公開すると、Pulse が自動で反映されます。</p>
           </div>
@@ -159,7 +160,7 @@
         <section class="panel-card score-system-card">
           <p class="eyebrow">Pulse Score</p>
           <h3>写真スコア体験</h3>
-          <p>既存アプリのAI採点と反応指標を合成。作品力とコミュニティの勢いを分けて見せつつ、最終スコアにまとめます。</p>
+          <p>既存アプリの写真スコアと反応指標を合成。作品力とコミュニティの勢いを分けて見せつつ、最終スコアにまとめます。</p>
           <div class="system-points">
             <span>構図</span>
             <span>光</span>

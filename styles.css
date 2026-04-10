@@ -258,6 +258,21 @@ textarea {
   font-size: 0.84rem;
 }
 
+.api-mode-note {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(22, 32, 50, 0.06);
+}
+
+.is-error {
+  color: var(--accent-deep);
+}
+
+.is-success {
+  color: var(--secondary);
+}
+
 .signup-actions {
   margin-top: 4px;
 }
