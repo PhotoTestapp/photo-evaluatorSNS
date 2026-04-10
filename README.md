@@ -1,7 +1,7 @@
 # Pulse SNS
 
-1ページ構成のフロントエンドで動く、実運用向けの最小SNSクライアントです。  
-認証、プロフィール更新、画像アップロード、投稿、Like、Save、Follow、ページネーション付きフィード取得を API ベースで扱います。
+Pulse SNS は、1ページ構成の最小SNSクライアントです。  
+このフロントは `meta[name="pulse-sns-api-base"]` で指定した API に接続し、認証、画像アップロード、投稿、反応、プロフィール更新、ページネーション付き一覧取得を行います。
 
 ## 対象ファイル
 
@@ -9,23 +9,34 @@
 - `styles.css`
 - `script.js`
 
-## フロントの前提
+## フロント前提
 
-- 正本データはすべて SNS API 側にあります
-- `localStorage` は以下の UI 補助用途だけに限定しています
-  - セッション情報: `token`, `accountId`, `email`, `profile`
-  - キャッシュプロフィール: 表示名、ハンドル、地域、自己紹介、アイコン
-  - API ベース URL: `pulse_sns_api_base`
-- パスワードはブラウザに永続保存しません
-- 投稿画像は `data URL` で投稿 API へ送らず、必ず upload API を経由します
-- スコア表記は UI 全体で `Photo Score` / `写真スコア` に統一しています
+- 正本データは API 側にあります
+- `localStorage` はセッション、キャッシュプロフィール、API ベース URL にだけ使います
+- パスワードは保存しません
+- 投稿画像とアバター画像は必ず `POST /api/sns/uploads` を通します
+- スコア表記は `Photo Score` / `写真スコア` に統一しています
+
+## API ベース URL
+
+`index.html`:
+
+```html
+<meta name="pulse-sns-api-base" content="https://photo-evaluator-dl-api.onrender.com" />
+```
+
+優先順位:
+
+1. `localStorage["pulse_sns_api_base"]`
+2. `meta[name="pulse-sns-api-base"]`
+3. `localhost` / `127.0.0.1` のときは `window.location.origin`
 
 ## 初期化時の挙動
 
 - `initializeApp()` の先頭で `cleanupLegacyStorage()` を実行します
-- これは旧試作の `localStorage` データがセッション復元や初期描画へ混ざらないようにするためです
-- legacy key の削除処理は同一ページロード中に一度だけ実行されます
-- 実行結果は `console.info` に出力し、ユーザー向けステータスには表示しません
+- 目的は旧試作の `localStorage` データが新しい API ベース実装へ混ざらないようにすることです
+- 同一ページロード中は一度だけ実行します
+- 実行結果は `console.info` に出力します
 
 削除対象:
 
@@ -36,14 +47,60 @@
 - `pulse_sns_accounts_v1`
 - `pulse_sns_session_v1`
 
-## 必要な API 契約
+## 共通レスポンスルール
 
-### 認証
+成功レスポンスの基本形:
 
-- `POST /api/sns/register`
-- `POST /api/sns/login`
+```json
+{
+  "success": true
+}
+```
 
-返却例:
+エラーレスポンスの基本形:
+
+```json
+{
+  "success": false,
+  "message": "短いエラー説明"
+}
+```
+
+フロントのエラー分類:
+
+- `NETWORK_ERROR`: 接続失敗または timeout
+- `AUTH_ERROR`: `401` / `403`
+- `VALIDATION_ERROR`: `4xx`
+- `SERVER_ERROR`: `5xx`
+
+## 必須 API 契約
+
+### 1. `POST /api/sns/register`
+
+必須フィールド:
+
+- `email`
+- `password`
+- `profile.displayName`
+- `profile.handle`
+
+リクエスト例:
+
+```json
+{
+  "email": "you@example.com",
+  "password": "password123",
+  "profile": {
+    "displayName": "Seiya Harada",
+    "handle": "@seiya",
+    "location": "Japan",
+    "bio": "写真とUIのあいだを記録するアカウント。",
+    "avatarSrc": "https://cdn.example.com/avatar.jpg"
+  }
+}
+```
+
+成功レスポンス例:
 
 ```json
 {
@@ -64,17 +121,74 @@
 }
 ```
 
-### 画像アップロード
+エラーレスポンス例:
 
-- `POST /api/sns/uploads`
+```json
+{
+  "success": false,
+  "message": "このメールアドレスはすでに登録されています。"
+}
+```
 
-必須:
+### 2. `POST /api/sns/login`
 
-- `multipart/form-data` を受け取ること
-- フィールド例: `file`, `kind`
-- フロントは投稿画像・アバター画像のどちらもこの API を使います
+必須フィールド:
 
-返却例:
+- `email`
+- `password`
+
+リクエスト例:
+
+```json
+{
+  "email": "you@example.com",
+  "password": "password123"
+}
+```
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "token": "jwt-or-session-token",
+  "account": {
+    "id": "acct_123",
+    "email": "you@example.com",
+    "profile": {
+      "id": "acct_123",
+      "displayName": "Seiya Harada",
+      "handle": "@seiya",
+      "location": "Japan",
+      "bio": "プロフィール",
+      "avatarSrc": "https://cdn.example.com/avatar.jpg"
+    }
+  }
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "メールアドレスまたはパスワードが一致しません。"
+}
+```
+
+### 3. `POST /api/sns/uploads`
+
+必須フィールド:
+
+- `file`
+- `kind`
+
+リクエスト:
+
+- `multipart/form-data`
+- `kind` は `post` または `avatar`
+
+成功レスポンス例:
 
 ```json
 {
@@ -84,63 +198,171 @@
 }
 ```
 
-### 投稿
-
-- `GET /api/sns/posts?sort=latest&limit=12`
-- `GET /api/sns/posts?sort=top&limit=12`
-- `GET /api/sns/posts?scope=mine&sort=latest&limit=12`
-- `GET /api/sns/posts?sort=latest&limit=12&cursor=<cursor>`
-- `POST /api/sns/posts`
-- `DELETE /api/sns/posts/:id`
-
-投稿レスポンスで期待するフィールド:
+エラーレスポンス例:
 
 ```json
 {
-  "id": "post_123",
-  "authorId": "acct_123",
-  "displayName": "Seiya Harada",
-  "handle": "@seiya",
-  "avatarSrc": "https://cdn.example.com/avatar.jpg",
-  "content": "投稿本文",
-  "imageSrc": "https://cdn.example.com/post.jpg",
-  "imageAlt": "投稿写真",
-  "scoreBreakdown": {
-    "compositionScore": 88,
-    "lightScore": 83,
-    "colorScore": 86,
-    "technicalScore": 82,
-    "subjectScore": 84,
-    "impactScore": 87
-  },
-  "baseScore": 85,
-  "pulse": 41,
-  "finalScore": 74,
-  "likesCount": 12,
-  "savesCount": 4,
-  "createdAt": "2026-04-10T12:00:00.000Z",
-  "viewerHasLiked": false,
-  "viewerHasSaved": false,
-  "viewerIsFollowingAuthor": true
+  "success": false,
+  "message": "画像サイズが上限を超えています。"
 }
 ```
 
-一覧取得の返却例:
+運用メモ:
+
+- フロントはアップロード前に圧縮を行います
+- 推奨形式は JPEG または PNG です
+- バックエンドでは元ファイル 10MB 以下を受け付ける前提にしてください
+- フロントは最長辺 1600px 以内を目安に圧縮して送信します
+- フロントは `imageUrl` が返らない場合、投稿を中断します
+
+### 4. `PATCH /api/sns/profile`
+
+必須フィールド:
+
+- `profile.displayName`
+- `profile.handle`
+
+リクエスト例:
+
+```json
+{
+  "profile": {
+    "displayName": "Seiya Harada",
+    "handle": "@seiya",
+    "location": "Japan",
+    "bio": "更新後プロフィール",
+    "avatarSrc": "https://cdn.example.com/avatar.jpg"
+  }
+}
+```
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "account": {
+    "id": "acct_123",
+    "email": "you@example.com",
+    "profile": {
+      "id": "acct_123",
+      "displayName": "Seiya Harada",
+      "handle": "@seiya",
+      "location": "Japan",
+      "bio": "更新後プロフィール",
+      "avatarSrc": "https://cdn.example.com/avatar.jpg"
+    }
+  }
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "ハンドル名はすでに使用されています。"
+}
+```
+
+### 5. `GET /api/sns/posts?sort=latest|top&limit=<n>&cursor=<cursor>`
+
+必須クエリ:
+
+- `sort`
+- `limit`
+
+任意クエリ:
+
+- `cursor`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "posts": [
+    {
+      "id": "post_123",
+      "authorId": "acct_123",
+      "displayName": "Seiya Harada",
+      "handle": "@seiya",
+      "avatarSrc": "https://cdn.example.com/avatar.jpg",
+      "content": "投稿本文",
+      "imageUrl": "https://cdn.example.com/post.jpg",
+      "imageAlt": "投稿写真",
+      "scoreBreakdown": {
+        "compositionScore": 88,
+        "lightScore": 83,
+        "colorScore": 86,
+        "technicalScore": 82,
+        "subjectScore": 84,
+        "impactScore": 87
+      },
+      "baseScore": 85,
+      "pulse": 41,
+      "finalScore": 74,
+      "likesCount": 12,
+      "savesCount": 4,
+      "createdAt": "2026-04-10T12:00:00.000Z",
+      "viewerHasLiked": false,
+      "viewerHasSaved": false,
+      "viewerIsFollowingAuthor": true
+    }
+  ],
+  "nextCursor": "cursor_2"
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "sort パラメータが不正です。"
+}
+```
+
+### 6. `GET /api/sns/posts?scope=mine&sort=latest&limit=<n>&cursor=<cursor>`
+
+必須クエリ:
+
+- `scope=mine`
+- `sort=latest`
+- `limit`
+
+成功レスポンス例:
 
 ```json
 {
   "success": true,
   "posts": [],
-  "nextCursor": "cursor_2"
+  "nextCursor": null
 }
 ```
 
-投稿作成の送信例:
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+### 7. `POST /api/sns/posts`
+
+必須フィールド:
+
+- `content` または `imageUrl`
+- `baseScore` 画像付き投稿時
+
+リクエスト例:
 
 ```json
 {
   "content": "本文",
-  "imageSrc": "https://cdn.example.com/post.jpg",
+  "imageUrl": "https://cdn.example.com/post.jpg",
   "imageAlt": "sample.jpg の投稿画像",
   "uploadAssetId": "asset_123",
   "scoreBreakdown": {
@@ -156,79 +378,279 @@
 }
 ```
 
-### 反応
-
-- `POST /api/sns/posts/:id/like`
-- `DELETE /api/sns/posts/:id/like`
-- `POST /api/sns/posts/:id/save`
-- `DELETE /api/sns/posts/:id/save`
-- `POST /api/sns/users/:id/follow`
-- `DELETE /api/sns/users/:id/follow`
-- `GET /api/sns/users/following`
-
-Like / Save の返却は更新済み投稿オブジェクトを想定しています。  
-Follow / Unfollow は最小でも以下のどちらかを返してください。
-
-- 更新済み投稿群: `{ success, posts: [...] }`
-- もしくは最小返却: `{ success, userId, viewerIsFollowingAuthor }`
-
-### プロフィール
-
-- `PATCH /api/sns/profile`
-
-送信例:
+成功レスポンス例:
 
 ```json
 {
-  "profile": {
+  "success": true,
+  "post": {
+    "id": "post_123",
+    "authorId": "acct_123",
     "displayName": "Seiya Harada",
     "handle": "@seiya",
-    "location": "Japan",
-    "bio": "更新後プロフィール",
-    "avatarSrc": "https://cdn.example.com/avatar.jpg"
+    "avatarSrc": "https://cdn.example.com/avatar.jpg",
+    "content": "本文",
+    "imageUrl": "https://cdn.example.com/post.jpg",
+    "imageAlt": "sample.jpg の投稿画像",
+    "scoreBreakdown": {
+      "compositionScore": 88,
+      "lightScore": 83,
+      "colorScore": 86,
+      "technicalScore": 82,
+      "subjectScore": 84,
+      "impactScore": 87
+    },
+    "baseScore": 85,
+    "pulse": 18,
+    "finalScore": 85,
+    "likesCount": 0,
+    "savesCount": 0,
+    "createdAt": "2026-04-10T12:00:00.000Z",
+    "viewerHasLiked": false,
+    "viewerHasSaved": false,
+    "viewerIsFollowingAuthor": false
   }
 }
 ```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "本文または画像が必要です。"
+}
+```
+
+### 8. `DELETE /api/sns/posts/:id`
+
+必須:
+
+- パスパラメータ `id`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "deletedPostId": "post_123"
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "この投稿を削除する権限がありません。"
+}
+```
+
+### 9. `POST /api/sns/posts/:id/like`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "post": {
+    "id": "post_123",
+    "likesCount": 13,
+    "viewerHasLiked": true
+  }
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+### 10. `DELETE /api/sns/posts/:id/like`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "post": {
+    "id": "post_123",
+    "likesCount": 12,
+    "viewerHasLiked": false
+  }
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+### 11. `POST /api/sns/posts/:id/save`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "post": {
+    "id": "post_123",
+    "savesCount": 5,
+    "viewerHasSaved": true
+  }
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+### 12. `DELETE /api/sns/posts/:id/save`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "post": {
+    "id": "post_123",
+    "savesCount": 4,
+    "viewerHasSaved": false
+  }
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+### 13. `POST /api/sns/users/:id/follow`
+
+成功レスポンス例 1:
+
+```json
+{
+  "success": true,
+  "userId": "acct_456",
+  "viewerIsFollowingAuthor": true
+}
+```
+
+成功レスポンス例 2:
+
+```json
+{
+  "success": true,
+  "posts": [
+    {
+      "id": "post_1",
+      "authorId": "acct_456",
+      "viewerIsFollowingAuthor": true
+    }
+  ]
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+### 14. `DELETE /api/sns/users/:id/follow`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "userId": "acct_456",
+  "viewerIsFollowingAuthor": false
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+### 15. `GET /api/sns/users/following`
+
+成功レスポンス例:
+
+```json
+{
+  "success": true,
+  "users": [
+    {
+      "id": "acct_456",
+      "displayName": "Other User",
+      "handle": "@other"
+    }
+  ]
+}
+```
+
+エラーレスポンス例:
+
+```json
+{
+  "success": false,
+  "message": "認証が必要です。"
+}
+```
+
+## 認証失効時の挙動
+
+- `apiRequest()` は `AbortController` による timeout を使います
+- `401` / `403` を受けたら共通処理で `clearSession()` を実行します
+- 再ログインが必要であることを `signupStatus` と `composerStatus` に表示します
+- セッション破棄後は feed / following / profile posts を初期化します
 
 ## ページネーション仕様
 
 - フィードとプロフィール投稿一覧の両方で `limit` と `cursor` を使います
 - フロントの既定 `limit` は 12 件です
 - `nextCursor` があれば「もっと見る」ボタンを表示します
-- `scope=mine` 側も同じくカーソルページネーション前提です
-
-## 認証失効時の挙動
-
-- `apiRequest()` は `AbortController` による timeout を使います
-- `401` / `403` を受けたら共通処理で `clearSession()` を実行します
-- セッション破棄後は feed / profile / following の表示を初期化します
-- UI には「セッションが切れました。再ログインしてください。」系のメッセージを表示します
+- フィルタ切替時は cursor をリセットします
+- 追加取得時は重複投稿を除去します
 
 ## 統計の母集団
 
 - `Session Stats` は共通フィード `state.feed` を母集団にした集計です
-- プロフィール統計は `GET /api/sns/posts?scope=mine&sort=latest` の取得結果を、さらに `authorId === session.accountId` で再確認した `profilePostsState.items` を母集団にした集計です
-
-## APIベースURLの設定
-
-`index.html` の `meta[name="pulse-sns-api-base"]` を使います。
-
-```html
-<meta name="pulse-sns-api-base" content="https://your-api.example.com" />
-```
-
-優先順位:
-
-1. `localStorage["pulse_sns_api_base"]`
-2. `meta[name="pulse-sns-api-base"]`
-3. `localhost` / `127.0.0.1` のときは `window.location.origin`
+- プロフィール統計は `scope=mine` 取得後に `authorId === session.accountId` を再確認した `profilePostsState.items` を母集団にした集計です
 
 ## API未接続時の挙動
 
 - UI上で「ローカルデモモード」と明示します
 - 写真解析プレビューは使えます
-- 登録、ログイン、プロフィール更新、投稿、Like、Save、Follow、削除は成立しません
-- 共通フィードは空表示になります
+- 登録、ログイン、プロフィール更新、投稿、削除、Like、Save、Follow は成立しません
+- 共通フィードとプロフィール投稿一覧は空表示になります
 
 ## 構文確認
 
@@ -240,13 +662,27 @@ node --check script.js
 
 ## 手動結合確認項目
 
-1. 新規登録後にトークンだけが保存され、パスワードが `localStorage` に残らないことを確認する
-2. ログイン後に `PATCH /api/sns/profile` でプロフィール更新が反映されることを確認する
-3. 投稿画像選択時に upload API が呼ばれ、`POST /api/sns/posts` には `imageSrc` / `uploadAssetId` が送られることを確認する
-4. Like / Save / Follow 後に API 応答の真値で UI が更新されることを確認する
-5. `DELETE /api/sns/posts/:id` 後に feed とプロフィール投稿一覧から削除されることを確認する
-6. `limit` / `cursor` を返す API で「もっと見る」が動作することを確認する
-7. 401 / 403 を返したときにセッション破棄と再ログイン導線が働くことを確認する
+1. 登録
+2. ログイン
+3. アバターアップロード
+4. 投稿画像アップロード
+5. 投稿作成
+6. フィード取得
+7. もっと見る
+8. Like / Save / Follow
+9. プロフィール更新
+10. 自分の投稿削除
+11. 401 時の挙動
+12. API 停止時の挙動
+
+確認例:
+
+1. 新規登録後にトークンだけが保存され、パスワードが `localStorage` に残らないこと
+2. 投稿画像選択後に upload API が呼ばれ、`POST /api/sns/posts` には `imageUrl` / `uploadAssetId` が送られること
+3. `PATCH /api/sns/profile` でプロフィール更新が反映されること
+4. `DELETE /api/sns/posts/:id` 後に feed とプロフィール投稿一覧から削除されること
+5. `limit` / `cursor` を返す API で「もっと見る」が動作すること
+6. 401 / 403 を返したときにセッション破棄と再ログイン導線が働くこと
 
 ## 開発時の配信例
 

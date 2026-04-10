@@ -111,6 +111,10 @@ const state = {
   following: [],
   loadingFeed: false,
   loadingProfilePosts: false,
+  submittingAuth: false,
+  updatingProfile: false,
+  publishingPost: false,
+  deletingPostIds: new Set(),
   legacyStorageCleaned: false,
   feedPagination: {
     cursor: null,
@@ -216,11 +220,11 @@ function isRecentPost(createdAt) {
 
 function getRankLabel(score) {
   const numeric = Number(score || 0);
-  if (numeric >= 95) return "Legend";
-  if (numeric >= 90) return "Elite";
-  if (numeric >= 80) return "Strong";
-  if (numeric >= 65) return "Rising";
-  return "Fresh";
+  if (numeric >= 95) return "最高";
+  if (numeric >= 90) return "上位";
+  if (numeric >= 80) return "良好";
+  if (numeric >= 65) return "注目";
+  return "通常";
 }
 
 function getScorePillClass(score) {
@@ -232,10 +236,10 @@ function getScorePillClass(score) {
 
 function getCaptionTag(score) {
   const numeric = Number(score || 0);
-  if (numeric >= 92) return "Editor Pick";
-  if (numeric >= 84) return "Trending";
-  if (numeric >= 72) return "Rising";
-  return "Fresh Drop";
+  if (numeric >= 92) return "注目投稿";
+  if (numeric >= 84) return "反応あり";
+  if (numeric >= 72) return "新着";
+  return "投稿";
 }
 
 function summarizeScores(scoreValues) {
@@ -356,8 +360,10 @@ function updateAuthUi() {
   if (dom.logoutButton) dom.logoutButton.hidden = !isLoggedIn();
   if (dom.loginButton) dom.loginButton.hidden = isLoggedIn();
   if (dom.signupSubmitButton) dom.signupSubmitButton.textContent = isLoggedIn() ? "プロフィール更新" : "登録する";
-  if (dom.publishButton) dom.publishButton.disabled = state.apiMode !== "online" || !isLoggedIn();
+  if (dom.publishButton) dom.publishButton.disabled = state.apiMode !== "online" || !isLoggedIn() || state.publishingPost;
   if (dom.signupPassword) dom.signupPassword.placeholder = isLoggedIn() ? "変更時のみ入力" : "8文字以上";
+  if (dom.signupSubmitButton) dom.signupSubmitButton.disabled = state.submittingAuth || state.updatingProfile;
+  if (dom.loginButton) dom.loginButton.disabled = state.submittingAuth || state.updatingProfile;
 }
 
 function fillSignupForm(profile) {
@@ -873,7 +879,7 @@ function resetUploadPreview() {
   state.pendingPhotoFile = null;
   if (dom.photoInput) dom.photoInput.value = "";
   dom.uploadPreview.className = "upload-preview empty-preview";
-  dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">Photo Ready</span><strong>写真を選ぶとここにプレビューと投稿用スコア候補が反映されます。</strong></div>`;
+  dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">画像プレビュー</span><strong>写真を選ぶとここにプレビューと投稿用スコア候補が表示されます。</strong></div>`;
 }
 
 async function preparePendingPhoto(file) {
@@ -917,6 +923,7 @@ function buildScoreMarkup(scoreValues) {
 
 function createPostMarkup(post) {
   const viewerOwnsPost = isLoggedIn() && post.authorId === state.session?.accountId;
+  const deletingPost = state.deletingPostIds.has(post.id);
   const avatarMarkup = buildAvatarMarkup({ displayName: post.displayName, avatarSrc: post.avatarSrc });
   const tag = post.tag || getCaptionTag(post.finalScore || post.baseScore);
   return `
@@ -934,9 +941,9 @@ function createPostMarkup(post) {
           </div>
         </div>
         <div class="post-author-actions">
-          <a class="chip" href="#profile">Profile</a>
+          <a class="chip" href="#profile">プロフィール</a>
           ${viewerOwnsPost ? `
-            <button class="chip" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}">削除</button>
+            <button class="chip" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}" ${deletingPost ? "disabled" : ""}>${deletingPost ? "削除中" : "削除"}</button>
           ` : `
             <button
               class="chip follow-toggle ${post.viewerIsFollowingAuthor ? "following-action" : ""}"
@@ -963,7 +970,7 @@ function createPostMarkup(post) {
     ` : `
       <div class="media-block text-media-card">
         <div class="photo-overlay">
-          <span>Text Drop</span>
+          <span>テキスト投稿</span>
           <strong>${escapeHtml(tag)}</strong>
         </div>
       </div>
@@ -984,13 +991,13 @@ function createPostMarkup(post) {
     <div class="score-grid">${buildScoreMarkup(post.scoreValues)}</div>
     <div class="post-actions">
       <button class="action-button like-button ${post.viewerHasLiked ? "liked" : ""}" type="button" data-action="like" data-post-id="${escapeHtml(post.id)}">${escapeHtml(post.likesCount)} Likes</button>
-      <a class="action-button" href="#profile">Profile</a>
+      <a class="action-button" href="#profile">プロフィール</a>
       <button class="action-button save-toggle ${post.viewerHasSaved ? "saved-action" : ""}" type="button" data-action="save" data-post-id="${escapeHtml(post.id)}">${post.viewerHasSaved ? "Saved" : "Save"}</button>
     </div>
     <div class="comment-preview">
       <div class="comment-preview-head">
         <strong>Score memo</strong>
-        <span>Server synced</span>
+        <span>サーバー反映済み</span>
       </div>
       <p>${escapeHtml(summarizeScores(post.scoreValues))}</p>
     </div>
@@ -1130,7 +1137,7 @@ function renderProfileSection() {
     <article class="profile-gallery-item">
       ${post.imageSrc
         ? `<img src="${escapeHtml(post.imageSrc)}" alt="${escapeHtml(post.imageAlt)}" />`
-        : `<div class="media-block text-media-card"><div class="photo-overlay"><span>Text Drop</span><strong>${escapeHtml((post.content || "投稿").slice(0, 20))}</strong></div></div>`}
+        : `<div class="media-block text-media-card"><div class="photo-overlay"><span>テキスト投稿</span><strong>${escapeHtml((post.content || "投稿").slice(0, 20))}</strong></div></div>`}
       <div class="profile-gallery-copy">
         <span>${escapeHtml(getRelativeTime(post.createdAt))}</span>
         <strong>Pulse ${escapeHtml(post.pulse)}</strong>
@@ -1293,6 +1300,7 @@ function buildProfileFromForm() {
 
 async function submitRegistration(event) {
   event.preventDefault();
+  if (state.submittingAuth || state.updatingProfile) return;
   if (state.apiMode !== "online") {
     setSignupStatus("API未接続のため、登録はできません。", "error");
     return;
@@ -1310,6 +1318,8 @@ async function submitRegistration(event) {
     return;
   }
 
+  state.submittingAuth = true;
+  updateAuthUi();
   try {
     const profile = buildProfileFromForm();
     if (state.pendingAvatarFile) {
@@ -1336,10 +1346,14 @@ async function submitRegistration(event) {
     await refreshAllData();
   } catch (error) {
     if (error.code !== "AUTH_ERROR") setSignupStatus(error.message, "error");
+  } finally {
+    state.submittingAuth = false;
+    updateAuthUi();
   }
 }
 
 async function submitLogin() {
+  if (state.submittingAuth || state.updatingProfile) return;
   if (state.apiMode !== "online") {
     setSignupStatus("API未接続のため、ログインはできません。", "error");
     return;
@@ -1351,6 +1365,8 @@ async function submitLogin() {
     return;
   }
 
+  state.submittingAuth = true;
+  updateAuthUi();
   try {
     const payload = await apiRequest(API_ENDPOINTS.login, {
       method: "POST",
@@ -1371,16 +1387,22 @@ async function submitLogin() {
     await refreshAllData();
   } catch (error) {
     if (error.code !== "AUTH_ERROR") setSignupStatus(error.message, "error");
+  } finally {
+    state.submittingAuth = false;
+    updateAuthUi();
   }
 }
 
 async function updateProfile() {
+  if (state.updatingProfile || state.submittingAuth) return;
   if (!requireAuth("プロフィール更新にはログインが必要です。")) return;
   if (state.apiMode !== "online") {
     setSignupStatus("API未接続のため、プロフィール更新はできません。", "error");
     return;
   }
 
+  state.updatingProfile = true;
+  updateAuthUi();
   try {
     const profile = buildProfileFromForm();
     if (state.pendingAvatarFile) {
@@ -1407,6 +1429,9 @@ async function updateProfile() {
     await loadProfilePostsPage({ reset: true });
   } catch (error) {
     if (error.code !== "AUTH_ERROR") setSignupStatus(error.message, "error");
+  } finally {
+    state.updatingProfile = false;
+    updateAuthUi();
   }
 }
 
@@ -1429,6 +1454,7 @@ function submitLogout() {
 
 // Post and reaction actions
 async function publishPost() {
+  if (state.publishingPost) return;
   if (!requireAuth("投稿するにはログインしてください。")) return;
   if (state.apiMode !== "online") {
     setComposerStatus("API未接続のため、投稿できません。", "error");
@@ -1441,7 +1467,8 @@ async function publishPost() {
     return;
   }
 
-  dom.publishButton.disabled = true;
+  state.publishingPost = true;
+  updateAuthUi();
   try {
     let uploadedImage = null;
     if (state.pendingPhotoFile) {
@@ -1449,7 +1476,7 @@ async function publishPost() {
     }
     const payload = {
       content: content || "写真のスコア結果をそのまま表示しています。",
-      imageSrc: uploadedImage?.imageUrl || "",
+      imageUrl: uploadedImage?.imageUrl || "",
       imageAlt: uploadedImage ? `${state.pendingPhoto.fileName} の投稿画像` : "",
       uploadAssetId: uploadedImage?.assetId || "",
       scoreBreakdown: state.pendingPhoto?.scoreBreakdown || null,
@@ -1470,12 +1497,15 @@ async function publishPost() {
   } catch (error) {
     if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
   } finally {
-    dom.publishButton.disabled = state.apiMode !== "online" || !isLoggedIn();
+    state.publishingPost = false;
+    updateAuthUi();
   }
 }
 
 async function deletePost(postId) {
+  if (state.deletingPostIds.has(postId)) return;
   if (!requireAuth("投稿削除にはログインが必要です。")) return;
+  state.deletingPostIds.add(postId);
   try {
     await apiRequest(`${API_ENDPOINTS.posts}/${encodeURIComponent(postId)}`, {
       method: "DELETE",
@@ -1485,6 +1515,8 @@ async function deletePost(postId) {
     setComposerStatus("投稿を削除しました。", "success");
   } catch (error) {
     if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
+  } finally {
+    state.deletingPostIds.delete(postId);
   }
 }
 
@@ -1605,7 +1637,7 @@ function bindUploadEvents() {
     } catch (error) {
       resetUploadPreview();
       dom.uploadPreview.className = "upload-preview empty-preview";
-      dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">Photo Error</span><strong>${escapeHtml(error.message)}</strong></div>`;
+      dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">画像エラー</span><strong>${escapeHtml(error.message)}</strong></div>`;
       setComposerStatus(error.message, "error");
     }
   });

@@ -23,7 +23,7 @@
           <div class="brand-mark">P</div>
           <div>
             <p class="brand-name">Pulse</p>
-            <p class="brand-sub">Creative Social Network</p>
+            <p class="brand-sub">写真と近況を共有するSNS</p>
           </div>
         </div>
 
@@ -34,16 +34,16 @@
         </nav>
 
         <div class="sidebar-card">
-          <p class="eyebrow">Today Focus</p>
-          <h2>「好き」を共有して、つながりを深く。</h2>
+          <p class="eyebrow">お知らせ</p>
+          <h2>写真と近況をまとめて投稿できます</h2>
           <p>
-            写真、短文、イベント告知までひとつのタイムラインに。小さなコミュニティにも使いやすいSNSの試作です。
+            写真付きの投稿、短い近況メモ、プロフィール更新をひとつの画面で扱えます。小さなコミュニティでも使いやすい構成です。
           </p>
           <button class="primary-button" id="sidebarComposeButton" type="button">投稿を作成</button>
         </div>
 
         <div class="sidebar-card signup-card">
-          <p class="eyebrow">Join Pulse</p>
+          <p class="eyebrow">アカウント</p>
           <h2>ユーザー登録</h2>
           <p>メールとパスワードでアカウントを作成し、同じブラウザでログイン状態を保持できます。</p>
           <form id="signupForm" class="signup-form">
@@ -98,8 +98,8 @@
             <input id="photoInput" class="hidden-input" type="file" accept="image/*" />
             <div id="uploadPreview" class="upload-preview empty-preview">
               <div class="upload-preview-copy">
-                <span class="upload-label">Photo Ready</span>
-                <strong>写真を選ぶとここにプレビューと実スコアが反映されます。</strong>
+                <span class="upload-label">画像プレビュー</span>
+                <strong>写真を選ぶと、ここにプレビューと写真スコアが表示されます。</strong>
               </div>
             </div>
             <div class="composer-actions">
@@ -130,7 +130,7 @@
         </div>
 
         <section class="empty-feed-card" id="emptyFeedCard">
-          <p class="eyebrow">Start Feed</p>
+          <p class="eyebrow">投稿</p>
           <h2>まだ投稿はありません</h2>
           <p>ユーザー登録のあとに写真や短文を公開すると、ここから実データだけでタイムラインが育ちます。</p>
           <button class="primary-button" id="emptyFeedComposeButton" type="button">最初の投稿を作成</button>
@@ -164,9 +164,9 @@
 
       <aside class="right-panel" id="discover">
         <section class="panel-card score-system-card">
-          <p class="eyebrow">Pulse Score</p>
-          <h3>写真スコア体験</h3>
-          <p>既存アプリの写真スコアと反応指標を合成。作品力とコミュニティの勢いを分けて見せつつ、最終スコアにまとめます。</p>
+          <p class="eyebrow">スコア表示</p>
+          <h3>写真スコアの見方</h3>
+          <p>写真スコアと反応数を分けて表示し、投稿ごとの見え方を確認しやすくしています。</p>
           <div class="system-points">
             <span>構図</span>
             <span>光</span>
@@ -178,45 +178,45 @@
         </section>
 
         <section class="panel-card">
-          <p class="eyebrow">Trending Shots</p>
+          <p class="eyebrow">よく使われているタグ</p>
           <ul class="trend-list" id="trendList"></ul>
         </section>
 
         <section class="panel-card">
-          <p class="eyebrow">Top Scores</p>
+          <p class="eyebrow">スコア上位</p>
           <ul class="leader-list" id="leaderList"></ul>
         </section>
 
         <section class="panel-card">
-          <p class="eyebrow">Following</p>
+          <p class="eyebrow">フォロー中</p>
           <ul class="leader-list" id="followingList"></ul>
         </section>
 
         <section class="panel-card glass-card" id="messages">
-          <p class="eyebrow">Visual Notes</p>
-          <h3>今日の写真ハイライト</h3>
+          <p class="eyebrow">ハイライト</p>
+          <h3>フィードの状況</h3>
           <p id="highlightCopy">
             反応が高いのは、スコア90点以上の写真。保存数は総合点よりも「色」と「印象」の高さに強く引っ張られています。
           </p>
         </section>
 
         <section class="panel-card">
-          <p class="eyebrow">Session Stats</p>
+          <p class="eyebrow">集計</p>
           <div class="session-grid">
             <div class="session-card">
-              <span>Live Posts</span>
+              <span>投稿数</span>
               <strong id="sessionPostCount">0</strong>
             </div>
             <div class="session-card">
-              <span>Avg Pulse</span>
+              <span>平均Pulse</span>
               <strong id="sessionPulseAverage">0</strong>
             </div>
             <div class="session-card">
-              <span>My Uploads</span>
+              <span>自分の投稿</span>
               <strong id="sessionMyPosts">0</strong>
             </div>
             <div class="session-card">
-              <span>Best Rank</span>
+              <span>最高ランク</span>
               <strong id="sessionBestRank">-</strong>
             </div>
           </div>
