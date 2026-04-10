@@ -378,7 +378,10 @@ function updateAuthUi() {
   if (dom.logoutButton) dom.logoutButton.hidden = !isLoggedIn();
   if (dom.loginButton) dom.loginButton.hidden = isLoggedIn();
   if (dom.signupSubmitButton) dom.signupSubmitButton.textContent = isLoggedIn() ? "プロフィール更新" : "登録する";
-  if (dom.publishButton) dom.publishButton.disabled = state.apiMode !== "online" || !isLoggedIn() || state.publishingPost;
+  if (dom.publishButton) {
+    dom.publishButton.disabled = state.publishingPost;
+    dom.publishButton.textContent = state.publishingPost ? "公開中..." : "公開する";
+  }
   if (dom.signupPassword) dom.signupPassword.placeholder = isLoggedIn() ? "変更時のみ入力" : "8文字以上";
   if (dom.signupSubmitButton) dom.signupSubmitButton.disabled = state.submittingAuth || state.updatingProfile;
   if (dom.loginButton) dom.loginButton.disabled = state.submittingAuth || state.updatingProfile;
