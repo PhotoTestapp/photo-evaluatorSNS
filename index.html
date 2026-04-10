@@ -80,7 +80,7 @@
               <textarea id="signupBio" rows="3" maxlength="120" placeholder="写真とUIのあいだを記録するアカウント。"></textarea>
             </label>
             <div class="composer-actions signup-actions">
-              <button class="primary-button" type="submit">登録する</button>
+              <button class="primary-button" id="signupSubmitButton" type="submit">登録する</button>
               <button class="chip" id="loginButton" type="button">ログイン</button>
               <button class="chip" id="logoutButton" type="button">ログアウト</button>
             </div>
@@ -125,6 +125,9 @@
         </section>
 
         <section class="feed-list" id="feedList"></section>
+        <div class="composer-actions">
+          <button class="chip" id="feedLoadMoreButton" type="button" hidden>もっと見る</button>
+        </div>
 
         <section class="empty-feed-card" id="emptyFeedCard">
           <p class="eyebrow">Start Feed</p>
@@ -151,6 +154,9 @@
             <p id="profileBio">プロフィール情報がまだありません。</p>
           </div>
           <div class="profile-gallery" id="profileGallery"></div>
+          <div class="composer-actions">
+            <button class="chip" id="profileLoadMoreButton" type="button" hidden>投稿をもっと見る</button>
+          </div>
           <p class="empty-list" id="profileEmpty">まだ表示できる投稿がありません。</p>
         </section>
 

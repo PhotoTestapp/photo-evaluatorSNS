@@ -2,6 +2,7 @@ const dom = {
   publishButton: document.getElementById("publishButton"),
   postInput: document.getElementById("postInput"),
   feedList: document.getElementById("feedList"),
+  feedLoadMoreButton: document.getElementById("feedLoadMoreButton"),
   leaderList: document.getElementById("leaderList"),
   followingList: document.getElementById("followingList"),
   photoInput: document.getElementById("photoInput"),
@@ -21,6 +22,7 @@ const dom = {
   emptyFeedCard: document.getElementById("emptyFeedCard"),
   emptyFeedComposeButton: document.getElementById("emptyFeedComposeButton"),
   signupForm: document.getElementById("signupForm"),
+  signupSubmitButton: document.getElementById("signupSubmitButton"),
   signupEmail: document.getElementById("signupEmail"),
   signupPassword: document.getElementById("signupPassword"),
   signupDisplayName: document.getElementById("signupDisplayName"),
@@ -44,6 +46,7 @@ const dom = {
   profileSavedCount: document.getElementById("profileSavedCount"),
   profilePulseAverage: document.getElementById("profilePulseAverage"),
   profileGallery: document.getElementById("profileGallery"),
+  profileLoadMoreButton: document.getElementById("profileLoadMoreButton"),
   profileEmpty: document.getElementById("profileEmpty"),
   snsApiBaseMeta: document.querySelector('meta[name="pulse-sns-api-base"]'),
 };
@@ -77,6 +80,8 @@ const API_ENDPOINTS = {
   register: "/api/sns/register",
   login: "/api/sns/login",
   posts: "/api/sns/posts",
+  uploads: "/api/sns/uploads",
+  profile: "/api/sns/profile",
   following: "/api/sns/users/following",
 };
 
@@ -89,17 +94,33 @@ const DEFAULT_PROFILE = {
   avatarSrc: "",
 };
 
+const PAGINATION_LIMIT = 12;
+const API_TIMEOUT_MS = 12000;
+const MAX_UPLOAD_EDGE = 1600;
+const UPLOAD_IMAGE_QUALITY = 0.86;
+
 const state = {
   session: null,
   apiMode: "checking",
   activeFilter: "all",
   pendingPhoto: null,
+  pendingPhotoFile: null,
   pendingAvatarSrc: "",
+  pendingAvatarFile: null,
   feed: [],
-  profilePosts: [],
   following: [],
   loadingFeed: false,
+  loadingProfilePosts: false,
   legacyStorageCleaned: false,
+  feedPagination: {
+    cursor: null,
+    hasMore: false,
+  },
+  profilePostsState: {
+    items: [],
+    cursor: null,
+    hasMore: false,
+  },
 };
 
 // Utilities
@@ -155,10 +176,6 @@ function renderAvatarNode(node, profile, fallbackClassName) {
   node.innerHTML = profile?.avatarSrc
     ? `<img src="${escapeHtml(profile.avatarSrc)}" alt="${escapeHtml(profile.displayName || DEFAULT_PROFILE.displayName)} のアイコン" />`
     : escapeHtml(getProfileInitials(profile?.displayName || DEFAULT_PROFILE.displayName));
-}
-
-function formatCount(value) {
-  return String(Number.isFinite(Number(value)) ? Number(value) : 0);
 }
 
 function getConfiguredSnsApiBase() {
@@ -305,43 +322,150 @@ function isLoggedIn() {
   return Boolean(state.session?.token && state.session?.accountId);
 }
 
+// UI status helpers
+function setNotice(node, message, tone = "") {
+  if (!node) return;
+  node.textContent = message;
+  node.classList.remove("is-error", "is-success");
+  if (tone === "error") node.classList.add("is-error");
+  if (tone === "success") node.classList.add("is-success");
+}
+
+function setSignupStatus(message, tone) {
+  setNotice(dom.signupStatus, message, tone);
+}
+
+function setComposerStatus(message, tone) {
+  setNotice(dom.composerStatus, message, tone);
+}
+
+function renderAppModeNotice() {
+  if (!dom.appModeNotice) return;
+  if (state.apiMode === "online") {
+    setNotice(dom.appModeNotice, "API接続中です。投稿・反応はサーバー同期されます。", "success");
+    return;
+  }
+  if (state.apiMode === "demo") {
+    setNotice(dom.appModeNotice, "API未接続です。現在はローカルデモ表示のみです。登録や投稿は反映されません。", "error");
+    return;
+  }
+  setNotice(dom.appModeNotice, "API接続を確認しています。");
+}
+
+function updateAuthUi() {
+  if (dom.logoutButton) dom.logoutButton.hidden = !isLoggedIn();
+  if (dom.loginButton) dom.loginButton.hidden = isLoggedIn();
+  if (dom.signupSubmitButton) dom.signupSubmitButton.textContent = isLoggedIn() ? "プロフィール更新" : "登録する";
+  if (dom.publishButton) dom.publishButton.disabled = state.apiMode !== "online" || !isLoggedIn();
+  if (dom.signupPassword) dom.signupPassword.placeholder = isLoggedIn() ? "変更時のみ入力" : "8文字以上";
+}
+
+function fillSignupForm(profile) {
+  if (dom.signupEmail) dom.signupEmail.value = state.session?.email || "";
+  if (dom.signupPassword) dom.signupPassword.value = "";
+  if (dom.signupDisplayName) dom.signupDisplayName.value = profile.displayName;
+  if (dom.signupHandle) dom.signupHandle.value = profile.handle;
+  if (dom.signupLocation) dom.signupLocation.value = profile.location;
+  if (dom.signupBio) dom.signupBio.value = profile.bio;
+  state.pendingAvatarSrc = profile.avatarSrc || "";
+  renderAvatarNode(dom.signupAvatarPreview, profile, "signup-avatar-preview gradient-avatar");
+}
+
+function applyProfileToUi(profile = getViewerProfile()) {
+  renderAvatarNode(dom.composerAvatar, profile, "avatar gradient-avatar");
+  fillSignupForm(profile);
+  updateAuthUi();
+  if (isLoggedIn()) {
+    setSignupStatus(`${state.session.email} でログイン中です。プロフィール更新も行えます。`, "success");
+  } else if (state.apiMode === "demo") {
+    setSignupStatus("未ログインです。API未接続のため現在はデモ表示です。", "error");
+  } else {
+    setSignupStatus("未ログインです。メールとパスワードで登録またはログインできます。");
+  }
+  renderProfileSection();
+}
+
+function cleanupLegacyStorage() {
+  if (state.legacyStorageCleaned) return;
+  const removedKeys = [];
+  LEGACY_STORAGE_KEYS.forEach((key) => {
+    try {
+      if (localStorage.getItem(key) !== null) removedKeys.push(key);
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn(`Legacy storage cleanup failed: ${key}`, error);
+    }
+  });
+  state.legacyStorageCleaned = true;
+  console.info(
+    removedKeys.length
+      ? `Pulse SNS: cleaned legacy localStorage keys: ${removedKeys.join(", ")}`
+      : "Pulse SNS: no legacy localStorage keys found to clean.",
+  );
+}
+
+function handleAuthFailure(message = "セッションが切れました。再ログインしてください。") {
+  clearSession();
+  state.following = [];
+  state.feed = [];
+  state.feedPagination = { cursor: null, hasMore: false };
+  state.profilePostsState = { items: [], cursor: null, hasMore: false };
+  applyProfileToUi(getViewerProfile());
+  renderFollowingList();
+  renderFeed([]);
+  renderProfileSection();
+  setSignupStatus(message, "error");
+  setComposerStatus(message, "error");
+}
+
+function buildApiError(message, code, status, payload) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  error.payload = payload;
+  return error;
+}
+
 // API
 async function apiRequest(path, options = {}) {
   const apiBase = getConfiguredSnsApiBase();
   if (!apiBase) {
-    const error = new Error("API未設定のため、現在はローカルデモモードです。");
-    error.code = "API_UNAVAILABLE";
-    throw error;
+    throw buildApiError("API未設定のため、現在はローカルデモモードです。", "API_UNAVAILABLE");
   }
 
   const method = (options.method || "GET").toUpperCase();
   const headers = new Headers(options.headers || {});
   const session = state.session || getCurrentSession();
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || API_TIMEOUT_MS;
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   if (options.json !== false) headers.set("Accept", "application/json");
-  if (options.body && !headers.has("Content-Type") && typeof options.body !== "string") {
+  if (session?.token && options.auth !== false) headers.set("Authorization", `Bearer ${session.token}`);
+  if (options.body && !headers.has("Content-Type") && typeof options.body !== "string" && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
-  }
-  if (session?.token && options.auth !== false) {
-    headers.set("Authorization", `Bearer ${session.token}`);
   }
 
   const requestInit = {
     method,
     headers,
     body: options.body
-      ? (typeof options.body === "string" ? options.body : JSON.stringify(options.body))
+      ? (options.body instanceof FormData || typeof options.body === "string" ? options.body : JSON.stringify(options.body))
       : undefined,
+    signal: controller.signal,
   };
 
   let response;
   try {
     response = await fetch(`${apiBase}${path}`, requestInit);
   } catch (error) {
-    const nextError = new Error("SNS API に接続できませんでした。");
-    nextError.code = "NETWORK_ERROR";
-    throw nextError;
+    window.clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      throw buildApiError("通信がタイムアウトしました。", "NETWORK_ERROR");
+    }
+    throw buildApiError("SNS API に接続できませんでした。", "NETWORK_ERROR");
   }
+  window.clearTimeout(timeoutId);
 
   const contentType = response.headers.get("content-type") || "";
   let payload = null;
@@ -352,23 +476,21 @@ async function apiRequest(path, options = {}) {
     payload = text ? { message: text } : null;
   }
 
+  if (response.status === 401 || response.status === 403) {
+    const authError = buildApiError(payload?.message || "認証が無効です。再ログインしてください。", "AUTH_ERROR", response.status, payload);
+    handleAuthFailure(authError.message);
+    throw authError;
+  }
+
   if (!response.ok || (payload && payload.success === false)) {
-    const message = payload?.message || payload?.error || "SNS API request failed";
-    const error = new Error(message);
-    error.status = response.status;
-    error.payload = payload;
-    throw error;
+    const message = payload?.message || payload?.error || "通信に失敗しました。";
+    if (response.status >= 400 && response.status < 500) {
+      throw buildApiError(message, "VALIDATION_ERROR", response.status, payload);
+    }
+    throw buildApiError(message, "SERVER_ERROR", response.status, payload);
   }
 
   return payload || { success: true };
-}
-
-function buildPostsQuery(filter) {
-  const params = new URLSearchParams();
-  if (filter === "top") params.set("sort", "top");
-  else params.set("sort", "latest");
-  if (filter === "mine") params.set("scope", "mine");
-  return params.toString() ? `?${params.toString()}` : "";
 }
 
 function normalizeAccount(account) {
@@ -404,7 +526,7 @@ function normalizePost(post) {
     handle: normalizeHandle(post?.handle || post?.author?.handle || DEFAULT_PROFILE.handle),
     avatarSrc: post?.avatarSrc || post?.author?.avatarSrc || "",
     content: post?.content || "",
-    imageSrc: post?.imageSrc || "",
+    imageSrc: post?.imageSrc || post?.imageUrl || "",
     imageAlt: post?.imageAlt || "投稿写真",
     scoreBreakdown,
     scoreValues,
@@ -421,86 +543,32 @@ function normalizePost(post) {
   };
 }
 
+function buildPostsQuery({ filter = "all", cursor = null, limit = PAGINATION_LIMIT, scopeOverride = "" } = {}) {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  if (cursor) params.set("cursor", cursor);
+  if (filter === "top") params.set("sort", "top");
+  else params.set("sort", "latest");
+  if (scopeOverride) params.set("scope", scopeOverride);
+  else if (filter === "mine") params.set("scope", "mine");
+  return `?${params.toString()}`;
+}
+
+function mergePosts(existingPosts, nextPosts) {
+  const seen = new Set();
+  const merged = [...existingPosts, ...nextPosts].filter((post) => {
+    if (seen.has(post.id)) return false;
+    seen.add(post.id);
+    return true;
+  });
+  return merged;
+}
+
 function requireAuth(message = "この操作にはログインが必要です。") {
   if (isLoggedIn()) return true;
   setSignupStatus(message, "error");
   setComposerStatus(message, "error");
   return false;
-}
-
-function cleanupLegacyStorage() {
-  if (state.legacyStorageCleaned) return;
-  const removedKeys = [];
-  LEGACY_STORAGE_KEYS.forEach((key) => {
-    try {
-      if (localStorage.getItem(key) !== null) removedKeys.push(key);
-      localStorage.removeItem(key);
-    } catch (error) {
-      console.warn(`Legacy storage cleanup failed: ${key}`, error);
-    }
-  });
-  state.legacyStorageCleaned = true;
-  console.info(
-    removedKeys.length
-      ? `Pulse SNS: cleaned legacy localStorage keys: ${removedKeys.join(", ")}`
-      : "Pulse SNS: no legacy localStorage keys found to clean.",
-  );
-}
-
-// UI status
-function setNotice(node, message, tone = "") {
-  if (!node) return;
-  node.textContent = message;
-  node.classList.remove("is-error", "is-success");
-  if (tone === "error") node.classList.add("is-error");
-  if (tone === "success") node.classList.add("is-success");
-}
-
-function setSignupStatus(message, tone) {
-  setNotice(dom.signupStatus, message, tone);
-}
-
-function setComposerStatus(message, tone) {
-  setNotice(dom.composerStatus, message, tone);
-}
-
-function renderAppModeNotice() {
-  if (!dom.appModeNotice) return;
-  if (state.apiMode === "online") {
-    setNotice(dom.appModeNotice, "API接続中です。投稿・反応はサーバー同期されます。", "success");
-    return;
-  }
-  if (state.apiMode === "demo") {
-    setNotice(dom.appModeNotice, "API未接続です。現在はローカルデモ表示のみです。登録や投稿は反映されません。", "error");
-    return;
-  }
-  setNotice(dom.appModeNotice, "API接続を確認しています。");
-}
-
-function fillSignupForm(profile) {
-  if (dom.signupEmail) dom.signupEmail.value = state.session?.email || "";
-  if (dom.signupPassword) dom.signupPassword.value = "";
-  if (dom.signupDisplayName) dom.signupDisplayName.value = profile.displayName;
-  if (dom.signupHandle) dom.signupHandle.value = profile.handle;
-  if (dom.signupLocation) dom.signupLocation.value = profile.location;
-  if (dom.signupBio) dom.signupBio.value = profile.bio;
-  state.pendingAvatarSrc = profile.avatarSrc || "";
-  renderAvatarNode(dom.signupAvatarPreview, profile, "signup-avatar-preview gradient-avatar");
-}
-
-function applyProfileToUi(profile = getViewerProfile()) {
-  renderAvatarNode(dom.composerAvatar, profile, "avatar gradient-avatar");
-  fillSignupForm(profile);
-  if (isLoggedIn()) {
-    setSignupStatus(`${state.session.email} でログイン中です。`, "success");
-  } else if (state.apiMode === "demo") {
-    setSignupStatus("未ログインです。API未接続のため現在はデモ表示です。", "error");
-  } else {
-    setSignupStatus("未ログインです。メールとパスワードで登録またはログインできます。");
-  }
-  if (dom.logoutButton) dom.logoutButton.hidden = !isLoggedIn();
-  if (dom.publishButton) dom.publishButton.disabled = state.apiMode !== "online";
-  renderProfileSection();
 }
 
 // Image analysis
@@ -716,7 +784,7 @@ function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("画像を読み込めませんでした"));
+    reader.onerror = () => reject(new Error("画像を読み込めませんでした。"));
     reader.readAsDataURL(file);
   });
 }
@@ -725,9 +793,30 @@ function loadImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("画像プレビューの生成に失敗しました"));
+    image.onerror = () => reject(new Error("画像プレビューの生成に失敗しました。"));
     image.src = src;
   });
+}
+
+async function compressImageFile(file, { maxEdge = MAX_UPLOAD_EDGE, quality = UPLOAD_IMAGE_QUALITY } = {}) {
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(dataUrl);
+  const scale = Math.min(1, maxEdge / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("画像圧縮の初期化に失敗しました。");
+  context.drawImage(image, 0, 0, width, height);
+
+  const type = /png$/i.test(file.type) ? "image/png" : "image/jpeg";
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob((nextBlob) => resolve(nextBlob), type, type === "image/jpeg" ? quality : undefined);
+  });
+  if (!(blob instanceof Blob)) throw new Error("画像圧縮に失敗しました。");
+  return new File([blob], file.name.replace(/\.[^.]+$/, type === "image/png" ? ".png" : ".jpg"), { type });
 }
 
 function buildMetricsFromImage(image) {
@@ -737,7 +826,7 @@ function buildMetricsFromImage(image) {
   const height = Math.max(24, Math.round(image.naturalHeight * scale));
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) throw new Error("画像解析の初期化に失敗しました");
+  if (!context) throw new Error("画像解析の初期化に失敗しました。");
   canvas.width = width;
   canvas.height = height;
   context.drawImage(image, 0, 0, width, height);
@@ -767,7 +856,7 @@ function buildMetricsFromImage(image) {
   };
 }
 
-function renderUploadPreview(dataUrl, totalScore, caption = "写真を解析しました") {
+function renderUploadPreview(dataUrl, totalScore, caption = "写真を解析しました。") {
   dom.uploadPreview.classList.remove("empty-preview");
   dom.uploadPreview.innerHTML = `
     <img src="${escapeHtml(dataUrl)}" alt="アップロードした写真のプレビュー" />
@@ -779,13 +868,40 @@ function renderUploadPreview(dataUrl, totalScore, caption = "写真を解析し�
   `;
 }
 
+function resetUploadPreview() {
+  state.pendingPhoto = null;
+  state.pendingPhotoFile = null;
+  if (dom.photoInput) dom.photoInput.value = "";
+  dom.uploadPreview.className = "upload-preview empty-preview";
+  dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">Photo Ready</span><strong>写真を選ぶとここにプレビューと投稿用スコア候補が反映されます。</strong></div>`;
+}
+
 async function preparePendingPhoto(file) {
   const dataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(dataUrl);
   const metrics = buildMetricsFromImage(image);
   const scores = deriveScoresFromMetrics(metrics);
-  state.pendingPhoto = { dataUrl, fileName: file.name, scoreBreakdown: scores };
-  renderUploadPreview(dataUrl, scores.totalScore, `${file.name} を解析し、投稿用スコア候補を作成しました`);
+  state.pendingPhoto = { previewUrl: dataUrl, fileName: file.name, scoreBreakdown: scores };
+  state.pendingPhotoFile = file;
+  renderUploadPreview(dataUrl, scores.totalScore, `${file.name} を解析し、投稿用スコア候補を作成しました。`);
+}
+
+async function uploadImageAsset(file, kind = "post") {
+  const compressedFile = await compressImageFile(file);
+  const formData = new FormData();
+  formData.append("file", compressedFile);
+  formData.append("kind", kind);
+  const response = await apiRequest(API_ENDPOINTS.uploads, {
+    method: "POST",
+    auth: true,
+    body: formData,
+    json: false,
+  });
+  const imageUrl = response?.imageUrl || response?.url || "";
+  if (!imageUrl) {
+    throw buildApiError("画像アップロード結果が不正です。", "SERVER_ERROR");
+  }
+  return { imageUrl, assetId: response?.assetId || "" };
 }
 
 // Feed rendering
@@ -800,18 +916,9 @@ function buildScoreMarkup(scoreValues) {
 }
 
 function createPostMarkup(post) {
-  const viewerOwnsPost = isLoggedIn() && post.authorId === state.session.accountId;
-  const avatarMarkup = buildAvatarMarkup({
-    displayName: post.displayName,
-    avatarSrc: post.avatarSrc,
-  });
+  const viewerOwnsPost = isLoggedIn() && post.authorId === state.session?.accountId;
+  const avatarMarkup = buildAvatarMarkup({ displayName: post.displayName, avatarSrc: post.avatarSrc });
   const tag = post.tag || getCaptionTag(post.finalScore || post.baseScore);
-  const finalScore = Number(post.finalScore || 0);
-  const baseScore = Number(post.baseScore || 0);
-  const pulse = Number(post.pulse || 0);
-  const likesCount = Number(post.likesCount || 0);
-  const savesCount = Number(post.savesCount || 0);
-
   return `
     <div class="post-header">
       <div class="post-meta">
@@ -821,28 +928,28 @@ function createPostMarkup(post) {
             <strong>${escapeHtml(post.displayName)}</strong>
             <p class="post-meta-line">
               <span>${escapeHtml(post.handle)}</span>
-              <span data-age-copy>${escapeHtml(getRelativeTime(post.createdAt))}</span>
+              <span>${escapeHtml(getRelativeTime(post.createdAt))}</span>
               <span class="micro-tag">${escapeHtml(tag)}</span>
             </p>
           </div>
         </div>
         <div class="post-author-actions">
           <a class="chip" href="#profile">Profile</a>
-          ${viewerOwnsPost ? "" : `
+          ${viewerOwnsPost ? `
+            <button class="chip" type="button" data-action="delete-post" data-post-id="${escapeHtml(post.id)}">削除</button>
+          ` : `
             <button
               class="chip follow-toggle ${post.viewerIsFollowingAuthor ? "following-action" : ""}"
               type="button"
               data-action="follow"
               data-user-id="${escapeHtml(post.authorId)}"
-            >
-              ${post.viewerIsFollowingAuthor ? "Following" : "Follow"}
-            </button>
+            >${post.viewerIsFollowingAuthor ? "Following" : "Follow"}</button>
           `}
         </div>
       </div>
       <div class="score-head">
-        <span class="score-pill ${getScorePillClass(finalScore)} total-score" data-total-score>${escapeHtml(finalScore)}</span>
-        <span class="tag">${escapeHtml(getRankLabel(finalScore))}</span>
+        <span class="score-pill ${getScorePillClass(post.finalScore)} total-score">${escapeHtml(post.finalScore)}</span>
+        <span class="tag">${escapeHtml(getRankLabel(post.finalScore))}</span>
       </div>
     </div>
     ${post.imageSrc ? `
@@ -863,32 +970,22 @@ function createPostMarkup(post) {
     `}
     <p class="post-body">${escapeHtml(post.content || "")}</p>
     <div class="score-summary">
-      <div class="score-summary-card"><span>Photo Score</span><strong>${escapeHtml(baseScore)}</strong></div>
-      <div class="score-summary-card"><span>Pulse</span><strong data-pulse-score-label>${escapeHtml(pulse)}</strong></div>
-      <div class="score-summary-card"><span>Final Rank</span><strong data-rank-label>${escapeHtml(getRankLabel(finalScore))}</strong></div>
+      <div class="score-summary-card"><span>Photo Score</span><strong>${escapeHtml(post.baseScore)}</strong></div>
+      <div class="score-summary-card"><span>Pulse</span><strong>${escapeHtml(post.pulse)}</strong></div>
+      <div class="score-summary-card"><span>Final Rank</span><strong>${escapeHtml(getRankLabel(post.finalScore))}</strong></div>
     </div>
     <div class="engagement-panel">
       <div class="engagement-stats">
-        <span>Likes <strong data-like-count-label>${escapeHtml(likesCount)}</strong></span>
-        <span>Saved <strong data-save-count-label>${escapeHtml(savesCount)}</strong></span>
-        <span>Posted <strong data-posted-at-label>${escapeHtml(getRelativeTime(post.createdAt))}</strong></span>
+        <span>Likes <strong>${escapeHtml(post.likesCount)}</strong></span>
+        <span>Saved <strong>${escapeHtml(post.savesCount)}</strong></span>
+        <span>Posted <strong>${escapeHtml(getRelativeTime(post.createdAt))}</strong></span>
       </div>
     </div>
     <div class="score-grid">${buildScoreMarkup(post.scoreValues)}</div>
     <div class="post-actions">
-      <button
-        class="action-button like-button ${post.viewerHasLiked ? "liked" : ""}"
-        type="button"
-        data-action="like"
-        data-post-id="${escapeHtml(post.id)}"
-      >${escapeHtml(likesCount)} Likes</button>
+      <button class="action-button like-button ${post.viewerHasLiked ? "liked" : ""}" type="button" data-action="like" data-post-id="${escapeHtml(post.id)}">${escapeHtml(post.likesCount)} Likes</button>
       <a class="action-button" href="#profile">Profile</a>
-      <button
-        class="action-button save-toggle ${post.viewerHasSaved ? "saved-action" : ""}"
-        type="button"
-        data-action="save"
-        data-post-id="${escapeHtml(post.id)}"
-      >${post.viewerHasSaved ? "Saved" : "Save"}</button>
+      <button class="action-button save-toggle ${post.viewerHasSaved ? "saved-action" : ""}" type="button" data-action="save" data-post-id="${escapeHtml(post.id)}">${post.viewerHasSaved ? "Saved" : "Save"}</button>
     </div>
     <div class="comment-preview">
       <div class="comment-preview-head">
@@ -905,7 +1002,6 @@ function createPostCard(post) {
   article.className = "post-card new-post";
   article.dataset.postId = post.id;
   article.dataset.authorId = post.authorId;
-  article.dataset.finalScore = String(post.finalScore || 0);
   article.dataset.createdAt = post.createdAt || "";
   article.innerHTML = createPostMarkup(post);
   return article;
@@ -920,35 +1016,6 @@ function animateScoreBars(root = document) {
 function getVisibleFeedPosts() {
   if (state.activeFilter === "new") return state.feed.filter((post) => isRecentPost(post.createdAt));
   return state.feed;
-}
-
-function renderFeed(posts = state.feed) {
-  dom.feedList.innerHTML = "";
-  posts.forEach((post) => {
-    dom.feedList.appendChild(createPostCard(post));
-  });
-  animateScoreBars(dom.feedList);
-  updateFeedSummary();
-  toggleEmptyFeedState();
-  renderLeaderBoard();
-  updateTrendList();
-  updateInsights();
-}
-
-function replacePostInState(nextPost) {
-  const normalized = normalizePost(nextPost);
-  state.feed = state.feed.map((post) => (post.id === normalized.id ? normalized : post));
-  state.profilePosts = state.profilePosts.map((post) => (post.id === normalized.id ? normalized : post));
-  const card = dom.feedList.querySelector(`[data-post-id="${CSS.escape(normalized.id)}"]`);
-  if (card) {
-    const nextCard = createPostCard(normalized);
-    card.replaceWith(nextCard);
-    animateScoreBars(nextCard);
-  }
-  renderProfileSection();
-  renderLeaderBoard();
-  updateTrendList();
-  updateInsights();
 }
 
 function renderLeaderBoard() {
@@ -1002,8 +1069,7 @@ function updateTrendList() {
 }
 
 function updateInsights() {
-  // Session Stats is intentionally based on the shared feed in state.feed,
-  // so these numbers reflect the currently loaded community timeline.
+  // Session Stats is intentionally based on the shared feed in state.feed.
   if (!state.feed.length) {
     if (dom.sessionPostCount) dom.sessionPostCount.textContent = "0";
     if (dom.sessionPulseAverage) dom.sessionPulseAverage.textContent = "0";
@@ -1012,17 +1078,14 @@ function updateInsights() {
     if (dom.highlightCopy) dom.highlightCopy.textContent = "投稿がまだないため、ハイライトはありません。最初の投稿が作成されると、ここに共通フィードの傾向を表示します。";
     return;
   }
-
   const ranked = [...state.feed].sort((left, right) => Number(right.finalScore || 0) - Number(left.finalScore || 0));
   const pulseAverage = ranked.reduce((sum, post) => sum + Number(post.pulse || 0), 0) / ranked.length;
-  const mineCount = state.feed.filter((post) => post.authorId && post.authorId === state.session?.accountId).length;
+  const mineCount = state.feed.filter((post) => post.authorId === state.session?.accountId).length;
   if (dom.sessionPostCount) dom.sessionPostCount.textContent = String(state.feed.length);
   if (dom.sessionPulseAverage) dom.sessionPulseAverage.textContent = String(Math.round(pulseAverage));
   if (dom.sessionMyPosts) dom.sessionMyPosts.textContent = String(mineCount);
   if (dom.sessionBestRank) dom.sessionBestRank.textContent = getRankLabel(Number(ranked[0].finalScore || 0));
-  if (dom.highlightCopy) {
-    dom.highlightCopy.textContent = `${ranked[0].displayName} が現在トップです。Pulse ${ranked[0].pulse}、Final Score ${ranked[0].finalScore} です。`;
-  }
+  if (dom.highlightCopy) dom.highlightCopy.textContent = `${ranked[0].displayName} が現在トップです。Pulse ${ranked[0].pulse}、Final Score ${ranked[0].finalScore} です。`;
 }
 
 function toggleEmptyFeedState() {
@@ -1030,12 +1093,25 @@ function toggleEmptyFeedState() {
   dom.emptyFeedCard.hidden = state.feed.length > 0;
 }
 
+function renderFeed(posts = state.feed) {
+  dom.feedList.innerHTML = "";
+  posts.forEach((post) => {
+    dom.feedList.appendChild(createPostCard(post));
+  });
+  animateScoreBars(dom.feedList);
+  updateFeedSummary();
+  toggleEmptyFeedState();
+  renderLeaderBoard();
+  updateTrendList();
+  updateInsights();
+  if (dom.feedLoadMoreButton) dom.feedLoadMoreButton.hidden = !state.feedPagination.hasMore;
+}
+
 function renderProfileSection() {
   if (!dom.profileGallery) return;
   const profile = getViewerProfile();
-  // Profile stats are intentionally based on state.profilePosts only,
-  // which comes from scope=mine and is rechecked against session.accountId.
-  const posts = isLoggedIn() ? state.profilePosts : [];
+  // Profile stats are intentionally based on profilePostsState.items only.
+  const posts = isLoggedIn() ? state.profilePostsState.items : [];
   const pulseAverage = posts.length
     ? Math.round(posts.reduce((sum, post) => sum + Number(post.pulse || 0), 0) / posts.length)
     : 0;
@@ -1064,27 +1140,72 @@ function renderProfileSection() {
 
   if (dom.profileEmpty) {
     dom.profileEmpty.hidden = posts.length > 0;
-    if (!isLoggedIn()) dom.profileEmpty.textContent = "ログインすると自分の投稿一覧が表示されます。";
-    else dom.profileEmpty.textContent = "まだ表示できる投稿がありません。";
+    dom.profileEmpty.textContent = isLoggedIn() ? "まだ表示できる投稿がありません。" : "ログインすると自分の投稿一覧が表示されます。";
   }
+  if (dom.profileLoadMoreButton) dom.profileLoadMoreButton.hidden = !state.profilePostsState.hasMore;
 }
 
-// Feed loading
-async function loadFeed(filter = state.activeFilter, options = {}) {
+function replacePostInCollections(post) {
+  const normalized = normalizePost(post);
+  state.feed = state.feed.map((item) => (item.id === normalized.id ? normalized : item));
+  state.profilePostsState.items = state.profilePostsState.items.map((item) => (item.id === normalized.id ? normalized : item));
+  renderFeed(state.feed);
+  renderProfileSection();
+}
+
+function removePostFromCollections(postId) {
+  state.feed = state.feed.filter((post) => post.id !== postId);
+  state.profilePostsState.items = state.profilePostsState.items.filter((post) => post.id !== postId);
+  renderFeed(state.feed);
+  renderProfileSection();
+}
+
+function applyFollowResponse(targetUserId, response) {
+  let resolvedFollowingState = Boolean(response?.viewerIsFollowingAuthor);
+  if (Array.isArray(response?.posts) && response.posts.length) {
+    const normalizedPosts = response.posts.map((post) => normalizePost(post));
+    const updatedMap = new Map(normalizedPosts.map((post) => {
+      if (post.authorId === targetUserId) resolvedFollowingState = post.viewerIsFollowingAuthor;
+      return [post.id, post];
+    }));
+    state.feed = state.feed.map((post) => updatedMap.get(post.id) || post);
+  } else {
+    const viewerIsFollowingAuthor = Boolean(response?.viewerIsFollowingAuthor);
+    resolvedFollowingState = viewerIsFollowingAuthor;
+    state.feed = state.feed.map((post) => (
+      post.authorId === targetUserId ? { ...post, viewerIsFollowingAuthor } : post
+    ));
+  }
+  renderFeed(state.feed);
+  return resolvedFollowingState;
+}
+
+// Feed loading and pagination
+async function loadFeedPage({ filter = state.activeFilter, reset = false } = {}) {
   if (state.apiMode === "demo") {
     state.feed = [];
+    state.feedPagination = { cursor: null, hasMore: false };
     renderFeed([]);
     return;
   }
 
   state.loadingFeed = true;
-  const query = buildPostsQuery(filter);
+  if (dom.feedLoadMoreButton) dom.feedLoadMoreButton.disabled = true;
+  const query = buildPostsQuery({
+    filter,
+    cursor: reset ? null : state.feedPagination.cursor,
+    limit: PAGINATION_LIMIT,
+  });
+
   try {
     const payload = await apiRequest(`${API_ENDPOINTS.posts}${query}`, { method: "GET", auth: true });
     const posts = Array.isArray(payload?.posts) ? payload.posts.map(normalizePost) : [];
-    state.feed = filter === "new" ? posts.filter((post) => isRecentPost(post.createdAt)) : posts;
-    if (!options.silent) renderFeed(state.feed);
-    else renderFeed(state.feed);
+    state.feed = reset ? posts : mergePosts(state.feed, posts);
+    state.feedPagination = {
+      cursor: payload?.nextCursor || null,
+      hasMore: Boolean(payload?.nextCursor),
+    };
+    renderFeed(state.activeFilter === "new" ? state.feed.filter((post) => isRecentPost(post.createdAt)) : state.feed);
   } catch (error) {
     if (error.code === "API_UNAVAILABLE" || error.code === "NETWORK_ERROR") {
       state.apiMode = "demo";
@@ -1092,33 +1213,47 @@ async function loadFeed(filter = state.activeFilter, options = {}) {
       setComposerStatus("API未接続のため、共通フィードを取得できません。", "error");
       state.feed = [];
       renderFeed([]);
-    } else {
+    } else if (error.code !== "AUTH_ERROR") {
       setComposerStatus(error.message, "error");
-      state.feed = [];
-      renderFeed([]);
     }
   } finally {
     state.loadingFeed = false;
+    if (dom.feedLoadMoreButton) dom.feedLoadMoreButton.disabled = false;
   }
 }
 
-async function loadProfilePosts() {
+async function loadProfilePostsPage({ reset = false } = {}) {
   if (!isLoggedIn() || state.apiMode !== "online") {
-    state.profilePosts = [];
+    state.profilePostsState = { items: [], cursor: null, hasMore: false };
     renderProfileSection();
     return;
   }
+
+  state.loadingProfilePosts = true;
+  if (dom.profileLoadMoreButton) dom.profileLoadMoreButton.disabled = true;
   try {
-    const payload = await apiRequest(`${API_ENDPOINTS.posts}?scope=mine&sort=latest`, { method: "GET", auth: true });
+    const query = buildPostsQuery({
+      filter: "all",
+      scopeOverride: "mine",
+      cursor: reset ? null : state.profilePostsState.cursor,
+      limit: PAGINATION_LIMIT,
+    });
+    const payload = await apiRequest(`${API_ENDPOINTS.posts}${query}`, { method: "GET", auth: true });
     const posts = Array.isArray(payload?.posts) ? payload.posts.map(normalizePost) : [];
-    // Keep the ownership rule explicit in the client as well,
-    // even when the backend already honors scope=mine.
-    state.profilePosts = posts.filter((post) => post.authorId === state.session?.accountId);
+    const confirmedMine = posts.filter((post) => post.authorId === state.session?.accountId);
+    state.profilePostsState = {
+      items: reset ? confirmedMine : mergePosts(state.profilePostsState.items, confirmedMine),
+      cursor: payload?.nextCursor || null,
+      hasMore: Boolean(payload?.nextCursor),
+    };
   } catch (error) {
-    console.warn("Profile posts load failed", error);
-    state.profilePosts = [];
+    if (error.code !== "AUTH_ERROR") console.warn("Profile posts load failed", error);
+    if (reset) state.profilePostsState = { items: [], cursor: null, hasMore: false };
+  } finally {
+    state.loadingProfilePosts = false;
+    if (dom.profileLoadMoreButton) dom.profileLoadMoreButton.disabled = false;
+    renderProfileSection();
   }
-  renderProfileSection();
 }
 
 async function loadFollowing() {
@@ -1131,28 +1266,28 @@ async function loadFollowing() {
     const payload = await apiRequest(API_ENDPOINTS.following, { method: "GET", auth: true });
     state.following = Array.isArray(payload?.users) ? payload.users : [];
   } catch (error) {
-    console.warn("Following load failed", error);
+    if (error.code !== "AUTH_ERROR") console.warn("Following load failed", error);
     state.following = [];
   }
   renderFollowingList();
 }
 
-async function refreshAllData(filter = state.activeFilter) {
+async function refreshAllData() {
   await Promise.all([
-    loadFeed(filter, { silent: false }),
-    loadProfilePosts(),
+    loadFeedPage({ filter: state.activeFilter, reset: true }),
+    loadProfilePostsPage({ reset: true }),
     loadFollowing(),
   ]);
 }
 
-// Auth actions
+// Auth and profile actions
 function buildProfileFromForm() {
   return {
     displayName: dom.signupDisplayName?.value || "",
     handle: dom.signupHandle?.value || "",
     location: dom.signupLocation?.value || "",
     bio: dom.signupBio?.value || "",
-    avatarSrc: state.pendingAvatarSrc || getViewerProfile().avatarSrc || "",
+    avatarSrc: getViewerProfile().avatarSrc || "",
   };
 }
 
@@ -1160,6 +1295,11 @@ async function submitRegistration(event) {
   event.preventDefault();
   if (state.apiMode !== "online") {
     setSignupStatus("API未接続のため、登録はできません。", "error");
+    return;
+  }
+
+  if (isLoggedIn()) {
+    await updateProfile();
     return;
   }
 
@@ -1171,14 +1311,15 @@ async function submitRegistration(event) {
   }
 
   try {
+    const profile = buildProfileFromForm();
+    if (state.pendingAvatarFile) {
+      const uploadedAvatar = await uploadImageAsset(state.pendingAvatarFile, "avatar");
+      profile.avatarSrc = uploadedAvatar.imageUrl;
+    }
     const payload = await apiRequest(API_ENDPOINTS.register, {
       method: "POST",
       auth: false,
-      body: {
-        email,
-        password,
-        profile: buildProfileFromForm(),
-      },
+      body: { email, password, profile },
     });
     const account = normalizeAccount(payload?.account);
     saveSession({
@@ -1187,13 +1328,14 @@ async function submitRegistration(event) {
       email: account.email || email,
       profile: account.profile,
     });
+    state.pendingAvatarFile = null;
     if (dom.signupPassword) dom.signupPassword.value = "";
     applyProfileToUi(account.profile);
     setSignupStatus(`${account.email || email} で登録しました。`, "success");
     setComposerStatus(`${account.profile.displayName} のアカウントを作成しました。`, "success");
-    await refreshAllData(state.activeFilter);
+    await refreshAllData();
   } catch (error) {
-    setSignupStatus(error.message, "error");
+    if (error.code !== "AUTH_ERROR") setSignupStatus(error.message, "error");
   }
 }
 
@@ -1223,22 +1365,64 @@ async function submitLogin() {
       profile: account.profile,
     });
     if (dom.signupPassword) dom.signupPassword.value = "";
+    state.pendingAvatarFile = null;
     applyProfileToUi(account.profile);
     setSignupStatus(`${account.email || email} でログインしました。`, "success");
-    await refreshAllData(state.activeFilter);
+    await refreshAllData();
   } catch (error) {
-    setSignupStatus(error.message, "error");
+    if (error.code !== "AUTH_ERROR") setSignupStatus(error.message, "error");
+  }
+}
+
+async function updateProfile() {
+  if (!requireAuth("プロフィール更新にはログインが必要です。")) return;
+  if (state.apiMode !== "online") {
+    setSignupStatus("API未接続のため、プロフィール更新はできません。", "error");
+    return;
+  }
+
+  try {
+    const profile = buildProfileFromForm();
+    if (state.pendingAvatarFile) {
+      const uploadedAvatar = await uploadImageAsset(state.pendingAvatarFile, "avatar");
+      profile.avatarSrc = uploadedAvatar.imageUrl;
+    }
+    const payload = await apiRequest(API_ENDPOINTS.profile, {
+      method: "PATCH",
+      auth: true,
+      body: { profile },
+    });
+    const account = normalizeAccount(payload?.account || payload?.profile || profile);
+    saveSession({
+      token: state.session.token,
+      accountId: state.session.accountId,
+      email: state.session.email,
+      profile: account.profile,
+    });
+    state.pendingAvatarFile = null;
+    applyProfileToUi(account.profile);
+    setSignupStatus("プロフィールを更新しました。", "success");
+    setComposerStatus("プロフィール更新を反映しました。", "success");
+    await loadFeedPage({ filter: state.activeFilter, reset: true });
+    await loadProfilePostsPage({ reset: true });
+  } catch (error) {
+    if (error.code !== "AUTH_ERROR") setSignupStatus(error.message, "error");
   }
 }
 
 function submitLogout() {
   clearSession();
-  if (dom.signupPassword) dom.signupPassword.value = "";
-  if (dom.signupEmail) dom.signupEmail.value = "";
-  state.profilePosts = [];
   state.following = [];
+  state.feed = [];
+  state.feedPagination = { cursor: null, hasMore: false };
+  state.profilePostsState = { items: [], cursor: null, hasMore: false };
+  state.pendingAvatarFile = null;
+  resetUploadPreview();
+  if (dom.signupEmail) dom.signupEmail.value = "";
+  if (dom.signupPassword) dom.signupPassword.value = "";
   applyProfileToUi(getViewerProfile());
   renderFollowingList();
+  renderFeed([]);
   renderProfileSection();
   setSignupStatus("ログアウトしました。", "success");
 }
@@ -1257,16 +1441,20 @@ async function publishPost() {
     return;
   }
 
-  const payload = {
-    content: content || "写真のスコア結果をそのまま表示しています。",
-    imageSrc: state.pendingPhoto?.dataUrl || "",
-    imageAlt: state.pendingPhoto ? `${state.pendingPhoto.fileName} の投稿画像` : "",
-    scoreBreakdown: state.pendingPhoto?.scoreBreakdown || null,
-    baseScore: state.pendingPhoto?.scoreBreakdown?.totalScore || null,
-  };
-
   dom.publishButton.disabled = true;
   try {
+    let uploadedImage = null;
+    if (state.pendingPhotoFile) {
+      uploadedImage = await uploadImageAsset(state.pendingPhotoFile, "post");
+    }
+    const payload = {
+      content: content || "写真のスコア結果をそのまま表示しています。",
+      imageSrc: uploadedImage?.imageUrl || "",
+      imageAlt: uploadedImage ? `${state.pendingPhoto.fileName} の投稿画像` : "",
+      uploadAssetId: uploadedImage?.assetId || "",
+      scoreBreakdown: state.pendingPhoto?.scoreBreakdown || null,
+      baseScore: state.pendingPhoto?.scoreBreakdown?.totalScore || null,
+    };
     const response = await apiRequest(API_ENDPOINTS.posts, {
       method: "POST",
       auth: true,
@@ -1275,17 +1463,28 @@ async function publishPost() {
     const nextPost = normalizePost(response?.post || response);
     state.feed = [nextPost, ...state.feed.filter((post) => post.id !== nextPost.id)];
     renderFeed(state.feed);
-    await loadProfilePosts();
-    dom.postInput.value = "";
-    dom.photoInput.value = "";
-    state.pendingPhoto = null;
-    dom.uploadPreview.className = "upload-preview empty-preview";
-    dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">Photo Ready</span><strong>写真を選ぶとここにプレビューと投稿用スコア候補が反映されます。</strong></div>`;
+    await loadProfilePostsPage({ reset: true });
+    if (dom.postInput) dom.postInput.value = "";
+    resetUploadPreview();
     setComposerStatus("投稿を公開しました。共通フィードに反映されています。", "success");
   } catch (error) {
-    setComposerStatus(error.message, "error");
+    if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
   } finally {
-    dom.publishButton.disabled = state.apiMode !== "online";
+    dom.publishButton.disabled = state.apiMode !== "online" || !isLoggedIn();
+  }
+}
+
+async function deletePost(postId) {
+  if (!requireAuth("投稿削除にはログインが必要です。")) return;
+  try {
+    await apiRequest(`${API_ENDPOINTS.posts}/${encodeURIComponent(postId)}`, {
+      method: "DELETE",
+      auth: true,
+    });
+    removePostFromCollections(postId);
+    setComposerStatus("投稿を削除しました。", "success");
+  } catch (error) {
+    if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
   }
 }
 
@@ -1296,9 +1495,9 @@ async function toggleLike(postId, currentlyLiked) {
       method: currentlyLiked ? "DELETE" : "POST",
       auth: true,
     });
-    replacePostInState(response?.post || response);
+    replacePostInCollections(response?.post || response);
   } catch (error) {
-    setComposerStatus(error.message, "error");
+    if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
   }
 }
 
@@ -1309,10 +1508,10 @@ async function toggleSave(postId, currentlySaved) {
       method: currentlySaved ? "DELETE" : "POST",
       auth: true,
     });
-    replacePostInState(response?.post || response);
-    await loadProfilePosts();
+    replacePostInCollections(response?.post || response);
+    await loadProfilePostsPage({ reset: true });
   } catch (error) {
-    setComposerStatus(error.message, "error");
+    if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
   }
 }
 
@@ -1323,17 +1522,11 @@ async function toggleFollow(userId, currentlyFollowing) {
       method: currentlyFollowing ? "DELETE" : "POST",
       auth: true,
     });
-    const updatedUserId = response?.userId || userId;
-    state.feed = state.feed.map((post) => (
-      post.authorId === updatedUserId
-        ? { ...post, viewerIsFollowingAuthor: !currentlyFollowing }
-        : post
-    ));
-    renderFeed(state.feed);
+    const viewerIsFollowingAuthor = applyFollowResponse(userId, response);
     await loadFollowing();
-    setComposerStatus(currentlyFollowing ? "フォローを解除しました。" : "フォローしました。", "success");
+    setComposerStatus(viewerIsFollowingAuthor ? "フォローしました。" : "フォローを解除しました。", "success");
   } catch (error) {
-    setComposerStatus(error.message, "error");
+    if (error.code !== "AUTH_ERROR") setComposerStatus(error.message, "error");
   }
 }
 
@@ -1348,7 +1541,7 @@ function bindFeedFilters() {
     button.addEventListener("click", async () => {
       state.activeFilter = button.dataset.filter || "all";
       document.querySelectorAll("[data-filter]").forEach((chip) => chip.classList.toggle("active-filter", chip === button));
-      await loadFeed(state.activeFilter);
+      await loadFeedPage({ filter: state.activeFilter, reset: true });
     });
   });
 }
@@ -1357,48 +1550,46 @@ function bindFeedActions() {
   dom.feedList?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
-
     const action = button.dataset.action;
     if (action === "like") {
       const postId = button.dataset.postId || "";
       const current = state.feed.find((post) => post.id === postId);
       if (current) await toggleLike(postId, current.viewerHasLiked);
     }
-
     if (action === "save") {
       const postId = button.dataset.postId || "";
       const current = state.feed.find((post) => post.id === postId);
       if (current) await toggleSave(postId, current.viewerHasSaved);
     }
-
     if (action === "follow") {
       const userId = button.dataset.userId || "";
       const current = state.feed.find((post) => post.authorId === userId);
-      await toggleFollow(userId, Boolean(current?.viewerIsFollowingAuthor));
+      if (current) await toggleFollow(userId, current.viewerIsFollowingAuthor);
+    }
+    if (action === "delete-post") {
+      const postId = button.dataset.postId || "";
+      if (postId) await deletePost(postId);
     }
   });
 }
 
 function bindUploadEvents() {
-  dom.uploadTrigger?.addEventListener("click", () => {
-    dom.photoInput?.click();
-  });
-
-  dom.signupAvatarButton?.addEventListener("click", () => {
-    dom.signupAvatarInput?.click();
-  });
+  dom.uploadTrigger?.addEventListener("click", () => dom.photoInput?.click());
+  dom.signupAvatarButton?.addEventListener("click", () => dom.signupAvatarInput?.click());
 
   dom.signupAvatarInput?.addEventListener("change", async (event) => {
     const [file] = event.target.files || [];
     if (!file) return;
     try {
+      state.pendingAvatarFile = file;
       state.pendingAvatarSrc = await readFileAsDataUrl(file);
       renderAvatarNode(dom.signupAvatarPreview, {
         displayName: dom.signupDisplayName?.value || DEFAULT_PROFILE.displayName,
         avatarSrc: state.pendingAvatarSrc,
       }, "signup-avatar-preview gradient-avatar");
-      setSignupStatus("アイコン画像を読み込みました。登録時にサーバーへ送信されます。", "success");
+      setSignupStatus("アイコン画像を読み込みました。保存時にアップロードします。", "success");
     } catch (error) {
+      state.pendingAvatarFile = null;
       state.pendingAvatarSrc = "";
       renderAvatarNode(dom.signupAvatarPreview, getViewerProfile(), "signup-avatar-preview gradient-avatar");
       setSignupStatus(error.message, "error");
@@ -1410,9 +1601,9 @@ function bindUploadEvents() {
     if (!file) return;
     try {
       await preparePendingPhoto(file);
-      setComposerStatus(`${file.name} を解析しました。投稿時は API へスコア内訳も送信されます。`, "success");
+      setComposerStatus(`${file.name} を解析しました。投稿時は画像アップロード API を経由して送信します。`, "success");
     } catch (error) {
-      state.pendingPhoto = null;
+      resetUploadPreview();
       dom.uploadPreview.className = "upload-preview empty-preview";
       dom.uploadPreview.innerHTML = `<div class="upload-preview-copy"><span class="upload-label">Photo Error</span><strong>${escapeHtml(error.message)}</strong></div>`;
       setComposerStatus(error.message, "error");
@@ -1442,6 +1633,8 @@ function bindComposerEvents() {
   });
   dom.sidebarComposeButton?.addEventListener("click", focusComposer);
   dom.emptyFeedComposeButton?.addEventListener("click", focusComposer);
+  dom.feedLoadMoreButton?.addEventListener("click", () => loadFeedPage({ filter: state.activeFilter, reset: false }));
+  dom.profileLoadMoreButton?.addEventListener("click", () => loadProfilePostsPage({ reset: false }));
 }
 
 // Bootstrap
@@ -1453,7 +1646,11 @@ async function detectApiMode() {
     return;
   }
   try {
-    await apiRequest(`${API_ENDPOINTS.posts}?sort=latest`, { method: "GET", auth: false });
+    await apiRequest(`${API_ENDPOINTS.posts}${buildPostsQuery({ filter: "all", limit: 1 })}`, {
+      method: "GET",
+      auth: false,
+      timeoutMs: 4000,
+    });
     state.apiMode = "online";
   } catch (error) {
     state.apiMode = (error.code === "NETWORK_ERROR" || error.code === "API_UNAVAILABLE") ? "demo" : "online";
@@ -1462,8 +1659,7 @@ async function detectApiMode() {
 }
 
 async function initializeApp() {
-  // Run legacy localStorage cleanup first so no stale trial data can affect
-  // session restore, profile hydration, or any initial render path below.
+  // Run legacy cleanup first so stale trial data never contaminates bootstrap.
   cleanupLegacyStorage();
   state.session = getCurrentSession();
   applyProfileToUi(getViewerProfile());
@@ -1474,10 +1670,11 @@ async function initializeApp() {
   bindComposerEvents();
   renderFollowingList();
   renderProfileSection();
+  resetUploadPreview();
   await detectApiMode();
 
   if (state.apiMode === "online") {
-    await refreshAllData(state.activeFilter);
+    await refreshAllData();
   } else {
     renderFeed([]);
     setComposerStatus("API未接続のため、現在はローカルデモ表示です。", "error");
